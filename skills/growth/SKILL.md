@@ -8,9 +8,7 @@ argument-hint: "[이름] [기간(일)]"
 
 먼저 `${CLAUDE_PLUGIN_ROOT}/agents/senior-dev.md`를 읽고 그 원칙·말투·장부 규칙을 따른다.
 
-```bash
-S="${CLAUDE_PLUGIN_ROOT}/scripts/sasu.py"
-```
+장부 명령은 아래처럼 전체 경로를 그대로 쓴다. 변수(`S=...`)에 담지 않는다 (데스크톱 앱은 이 경로만 허용한다).
 
 ## 기록만 해 달라는 요청이면
 
@@ -19,7 +17,7 @@ S="${CLAUDE_PLUGIN_ROOT}/scripts/sasu.py"
 ## 리포트
 
 1. 이름은 인자 → `git config user.name` 순서로 정한다. 기간 기본값은 7일.
-2. `python3 "$S" report --who "<이름>" --days <기간>`
+2. `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/sasu.py" report --who "<이름>" --days <기간>`
 3. 결과에 따라:
    - "기록 없음": "아직 기록이 없어요. `review`나 `debug`를 쓰면 쌓여요"라고 하고 끝낸다.
    - "이번 기간 기록 없음 (전체 N건 …)": 이번 기간엔 지적이 없었다는 뜻이다. 기간을 늘려(`--days 30`) 예전에 자주 나온 주제를 보고, 그게 사라졌다면 **좋아진 점**으로 알려 준다. 리뷰를 안 받아서 없는 것일 수도 있으니 단정하지 않는다.

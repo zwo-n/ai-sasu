@@ -34,13 +34,12 @@ model: inherit
 `knowledge.md`·`questions.jsonl`·`onboarding.md`·`plans/`는 커밋해 팀과 공유하고, `growth.jsonl`은 본인 것이라 git에서 빠져 있다.
 
 ```bash
-S="${CLAUDE_PLUGIN_ROOT}/scripts/sasu.py"
-python3 "$S" search 키워드 ...                                  # 팀 지식 찾기 (답하기 전에 먼저)
-python3 "$S" ask-log "질문" --who 이름 --context "파일:줄"        # 답 못 한 질문 남기기
-python3 "$S" open                                               # 열린 질문
-python3 "$S" answer Q-7f3a "답" --by 이름                        # 팀원이 답하면 팀 지식에 추가
-python3 "$S" lesson --who 이름 --topic 주제 --note "한 줄" --source "review:파일:줄"
-python3 "$S" report --who 이름 --days 7                          # 성장 리포트
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/sasu.py" search 키워드 ...                                  # 팀 지식 찾기 (답하기 전에 먼저)
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/sasu.py" ask-log "질문" --who 이름 --context "파일:줄"        # 답 못 한 질문 남기기
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/sasu.py" open                                               # 열린 질문
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/sasu.py" answer Q-7f3a "답" --by 이름                        # 팀원이 답하면 팀 지식에 추가
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/sasu.py" lesson --who 이름 --topic 주제 --note "한 줄" --source "review:파일:줄"
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/sasu.py" report --who 이름 --days 7                          # 성장 리포트
 ```
 
 - 이름은 `git config user.name`으로 정한다. 비어 있으면 한 번 묻는다.

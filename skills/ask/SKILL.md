@@ -8,14 +8,12 @@ argument-hint: "[질문 | 열린 질문 | Q-번호 답: 내용]"
 
 먼저 `${CLAUDE_PLUGIN_ROOT}/agents/senior-dev.md`를 읽고 그 원칙·말투·장부 규칙을 따른다.
 
-```bash
-S="${CLAUDE_PLUGIN_ROOT}/scripts/sasu.py"
-```
+장부 명령은 아래처럼 전체 경로를 그대로 쓴다. 변수(`S=...`)에 담지 않는다 (데스크톱 앱은 이 경로만 허용한다).
 
 ## 장부 관리 요청이면
 
-- "열린 질문", "답 못 한 질문": `python3 "$S" open`
-- "Q-7f3a 답: ...": 답한 사람 이름을 정하고 `python3 "$S" answer Q-7f3a "..." --by 이름`. 다음부터 이 답이 팀 지식으로 쓰인다고 알려 준다.
+- "열린 질문", "답 못 한 질문": `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/sasu.py" open`
+- "Q-7f3a 답: ...": 답한 사람 이름을 정하고 `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/sasu.py" answer Q-7f3a "..." --by 이름`. 다음부터 이 답이 팀 지식으로 쓰인다고 알려 준다.
 
 ## 질문이면
 
@@ -23,7 +21,7 @@ S="${CLAUDE_PLUGIN_ROOT}/scripts/sasu.py"
 
 질문의 핵심 단어 2~4개로 찾는다. 동의어도 함께 넣는다 (예: 배포 deploy 릴리스).
 ```bash
-python3 "$S" search 배포 deploy 스테이징
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/sasu.py" search 배포 deploy 스테이징
 ```
 찾으면 그 답을 쓰고 출처(Q-번호)를 붙인다. 답이 코드와 달라 보이면 코드를 확인하고, 다르다고 알려 준다.
 
@@ -50,11 +48,11 @@ README, docs/, 설정 파일, `git log`(왜 바뀌었는지)도 근거가 된다
 - 코드에 근거가 없는 것
 - 팀이 정할 일: 정책, "왜 이렇게 결정했는지", 일정, 담당자, 권한, 비밀번호·키 위치
 
-먼저 `python3 "$S" open`으로 같은 뜻의 질문이 이미 열려 있는지 본다. 있으면 새로 남기지 않고 그 번호를 알려 준다.
+먼저 `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/sasu.py" open`으로 같은 뜻의 질문이 이미 열려 있는지 본다. 있으면 새로 남기지 않고 그 번호를 알려 준다.
 문장까지 같으면 스크립트가 알아서 기존 번호를 돌려준다 ("이미 열려 있는 같은 질문").
 
 ```bash
-python3 "$S" ask-log "결제 재시도 횟수를 3번으로 정한 이유?" --who "<이름>" --context "src/pay.py:40"
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/sasu.py" ask-log "결제 재시도 횟수를 3번으로 정한 이유?" --who "<이름>" --context "src/pay.py:40"
 ```
 
 그리고 스크립트가 준 번호로 이렇게 알려 준다: "Q-7f3a로 질문 장부에 남겼어요. 아시는 분이 답해 주면(`Q-7f3a 답: ...`) 다음부터 제가 바로 답할 수 있어요. 질문 장부는 커밋해서 팀과 공유해 주세요."

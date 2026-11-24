@@ -1,0 +1,100 @@
+:root {
+  --paper: #FFFDF8;
+  --ink: #2A2118;
+  --muted: #7A6A58;
+  --line: #E8DCC8;
+  --accent: #E08E1F;
+  --warn: #E5484D;
+  --code: #F5EEDF;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --paper: #24201B; --ink: #F3EADB; --muted: #B5A68F; --line: #3D352B; --code: #312A22; }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: transparent; overflow: hidden;
+  font: 13px/1.5 -apple-system, "Apple SD Gothic Neo", sans-serif; color: var(--ink); user-select: none; }
+
+#stage { position: absolute; inset: 0; }
+
+/* 캐릭터 */
+#buddy { position: absolute; right: 8px; bottom: 6px; width: 120px; height: 132px; cursor: grab; }
+#buddy:active { cursor: grabbing; }
+#buddy svg, #buddy img { width: 100%; height: 100%; display: block; }
+#buddy img { object-fit: contain; object-position: bottom; transform-origin: 50% 100%; animation: bob 3.2s ease-in-out infinite; -webkit-user-drag: none; }
+#buddy[data-mood="thinking"] img { animation: think 1.6s ease-in-out infinite; }
+#buddy[data-mood="warn"] img { animation: shake .5s ease-in-out 3; }
+#buddy[data-mood="happy"] img { animation: hop .6s ease-out 2; }
+#buddy[data-mood="sleep"] img { animation: bob 6s ease-in-out infinite; }
+#body-all { transform-origin: 60px 116px; animation: bob 3.2s ease-in-out infinite; }
+#buddy[data-mood="thinking"] #body-all { animation: think 1.6s ease-in-out infinite; }
+#buddy[data-mood="warn"] #body-all { animation: shake .5s ease-in-out 3; }
+#buddy[data-mood="happy"] #body-all { animation: hop .6s ease-out 2; }
+#buddy[data-mood="sleep"] #body-all { animation: bob 6s ease-in-out infinite; opacity: .85; }
+#buddy[data-mood="warn"] #sprout { transform: rotate(28deg); transform-origin: 60px 24px; }
+#buddy[data-mood="sleep"] #sprout { transform: rotate(-35deg); transform-origin: 60px 24px; }
+
+.part { display: none; }
+#buddy[data-mood="idle"] .s-idle,
+#buddy[data-mood="thinking"] .s-thinking,
+#buddy[data-mood="warn"] .s-warn,
+#buddy[data-mood="happy"] .s-happy,
+#buddy[data-mood="sleep"] .s-sleep { display: inline; }
+
+.blink { transform-origin: 60px 52px; animation: blink 4.5s infinite; }
+.fx-dots circle { animation: dot 1.2s infinite; }
+.fx-dots circle:nth-child(2) { animation-delay: .2s; }
+.fx-dots circle:nth-child(3) { animation-delay: .4s; }
+.fx-z { animation: float 2.4s ease-in-out infinite; }
+.fx-spark { animation: twinkle 1s ease-in-out infinite; transform-origin: center; }
+
+@keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes think { 0%,100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg); } }
+@keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
+@keyframes hop { 0%,100% { transform: translateY(0); } 40% { transform: translateY(-10px); } }
+@keyframes blink { 0%,94%,100% { transform: scaleY(1); } 97% { transform: scaleY(.1); } }
+@keyframes dot { 0%,100% { opacity: .2; } 50% { opacity: 1; } }
+@keyframes float { 0%,100% { transform: translateY(0); opacity: .6; } 50% { transform: translateY(-4px); opacity: 1; } }
+@keyframes twinkle { 0%,100% { opacity: .5; } 50% { opacity: 1; } }
+
+/* 말풍선 */
+#bubble { position: absolute; right: 20px; bottom: 146px; max-width: 300px; padding: 9px 12px;
+  background: var(--paper); border: 2px solid var(--ink); border-radius: 14px; white-space: pre-line;
+  box-shadow: 0 4px 14px rgba(0,0,0,.18); cursor: pointer; animation: pop .18s ease-out; }
+#bubble::after { content: ""; position: absolute; right: 44px; bottom: -9px; width: 14px; height: 14px;
+  background: var(--paper); border-right: 2px solid var(--ink); border-bottom: 2px solid var(--ink); transform: rotate(45deg); }
+#bubble.has-review { border-color: var(--accent); }
+#bubble.has-review::after { border-color: var(--accent); }
+@keyframes pop { from { transform: scale(.9); opacity: 0; } }
+
+/* 대화창 */
+#panel { position: absolute; right: 8px; bottom: 146px; width: 364px; height: 400px; display: flex; flex-direction: column;
+  background: var(--paper); border: 2px solid var(--ink); border-radius: 16px; box-shadow: 0 8px 28px rgba(0,0,0,.25);
+  user-select: text; overflow: hidden; }
+#panel[hidden], #bubble[hidden], #review-bar[hidden], #custom[hidden] { display: none; }
+#panel header { display: flex; gap: 6px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+#panel header strong { flex: 1; font-size: 13px; }
+#panel select, #panel button { font: inherit; font-size: 12px; color: var(--ink); background: transparent;
+  border: 1px solid var(--line); border-radius: 8px; padding: 3px 7px; cursor: pointer; }
+#panel button:hover { border-color: var(--accent); }
+#log { flex: 1; overflow-y: auto; padding: 10px 12px; }
+.msg { margin: 0 0 10px; }
+.msg.me { text-align: right; }
+.msg.me span { display: inline-block; background: var(--accent); color: #fff; padding: 6px 10px; border-radius: 12px 12px 2px 12px; white-space: pre-wrap; text-align: left; }
+.msg.sasu { padding: 8px 10px; background: var(--code); border-radius: 12px 12px 12px 2px; }
+.msg.err { color: var(--warn); }
+.msg.wait { color: var(--muted); font-style: italic; }
+#log h1, #log h2, #log h3, #log h4 { font-size: 13px; margin: 10px 0 4px; }
+#log h2 { font-size: 14px; }
+#log p, #log ul, #log ol { margin: 4px 0; }
+#log ul, #log ol { padding-left: 18px; }
+#log code { background: var(--code); padding: 1px 4px; border-radius: 4px; font: 12px ui-monospace, Menlo, monospace; }
+#log pre { background: var(--code); padding: 8px; border-radius: 8px; overflow-x: auto; }
+#log pre code { padding: 0; }
+#review-bar { display: flex; gap: 6px; padding: 6px 10px; border-top: 1px solid var(--line); }
+#ask { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid var(--line); }
+#ask textarea { flex: 1; resize: none; font: inherit; color: var(--ink); background: transparent;
+  border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; }
+#ask textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
+#ask button { font: inherit; font-weight: 600; color: #fff; background: var(--accent); border: 0; border-radius: 10px; padding: 0 12px; cursor: pointer; }
+#ask button:disabled { opacity: .5; cursor: default; }
+footer#left { padding: 0 12px 6px; font-size: 11px; color: var(--muted); }

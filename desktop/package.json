@@ -1,0 +1,15 @@
+{
+  "name": "sasu-buddy",
+  "version": "0.1.0",
+  "description": "화면 아래에 떠 있는 AI 사수 캐릭터. 누르면 대화하고, 내 PR이 올라오면 리뷰해 준다.",
+  "main": "main.js",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/"
+  },
+  "devDependencies": {
+    "electron": "45.2.3"
+  }
+}

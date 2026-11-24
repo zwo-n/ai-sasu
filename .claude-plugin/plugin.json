@@ -1,6 +1,6 @@
 {
   "name": "sasu",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "AI 사수: 주니어 개발자 팀을 위한 시니어 개발자 멘토. 가르치는 코드 리뷰, 디버깅 코칭, 근거 있는 질문 답변과 질문 장부, 설계 상담, 온보딩, 성장 리포트.",
   "author": { "name": "AMBETRI" },
   "license": "MIT",

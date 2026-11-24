@@ -72,6 +72,12 @@ class TestDocsMatchScript(unittest.TestCase):
                 with self.subTest(file=p.name, cmd=cmd):
                     self.assertIn(cmd, SCRIPT_CMDS)
 
+    def test_ledger_called_by_full_path(self):
+        # 데스크톱 앱은 sasu.py 의 정확한 경로만 허용한다. 변수에 담으면 거부된다.
+        for p in self.DOCS:
+            with self.subTest(file=p.name):
+                self.assertNotIn('"$S"', p.read_text(encoding="utf-8"))
+
     def test_example_topics_are_from_fixed_list(self):
         topics = topic_list()
         self.assertIn("에러 처리", topics)
