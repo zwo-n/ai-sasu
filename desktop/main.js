@@ -347,7 +347,8 @@ handle('review:get', id => {
   if (!meta) return null; // 기록에 있는 리뷰만 연다
   const f = path.join(REVIEW_DIR, path.basename(id) + '.md');
   if (!fs.existsSync(f)) return null;
-  return { meta, html: renderMarkdown(fs.readFileSync(f, 'utf8')) };
+  const md = fs.readFileSync(f, 'utf8');
+  return { meta, html: renderMarkdown(md), card: bubbleCard({ repo: repoName(meta.repo), number: meta.number, title: meta.title }, summarize(md)) };
 });
 
 on('review:open-pr', id => {

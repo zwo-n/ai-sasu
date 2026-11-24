@@ -144,9 +144,77 @@ function add(cls, html, isText = false) {
   return d;
 }
 
+// ---------- 리뷰 보기: 칸마다 색, 지적은 카드로 ----------
+const SECTION = { '잘한 점': 'good', '아쉬운 점': 'soft', '꼭 고칠 점': 'must', '고칠 점': 'soft', '판정': 'verdict', '이번에 익힐 것 하나': 'learn' };
+const LEVEL = { 반드시: 'must', 권장: 'soft', 참고: 'note' };
+
+function reviewSummary(c) {
+  const box = el('div', 'rv-summary');
+  const head = el('div', 'b-head');
+  head.append(el('span', 'b-where', c.where), el('span', `chip tone-${c.tone}`, c.verdict));
+  const stats = el('div', 'b-stats');
+  for (const st of c.stats) {
+    const s = el('div', `stat ${st.kind}${st.n ? '' : ' zero'}`);
+    s.append(el('b', '', String(st.n)), el('span', '', st.label));
+    stats.append(s);
+  }
+  box.append(head, stats);
+  return box;
+}
+
+// renderMarkdown 이 만든(이미 이스케이프된) 노드를 옮기기만 한다. 새 HTML 문자열은 넣지 않는다.
+function decorateReview(root) {
+  const nodes = [...root.childNodes];
+  let section = null;
+  root.replaceChildren();
+  for (const n of nodes) {
+    if (n.nodeName === 'H2') {
+      const kind = SECTION[n.textContent.trim()] || 'other';
+      section = el('section', `rv rv-${kind}`);
+      root.append(section);
+    }
+    (section || root).append(n);
+  }
+  for (const h of root.querySelectorAll('h3')) {
+    const first = h.firstChild;
+    const m = first?.nodeType === 3 && first.textContent.match(/^\s*\d+\.\s*\[(반드시|권장|참고)\]\s*/);
+    if (m) {
+      first.textContent = first.textContent.slice(m[0].length);
+      h.prepend(el('span', `pill lv-${LEVEL[m[1]]}`, m[1]));
+    }
+    // 끝의 " — `파일:줄`" 은 아래 줄로
+    const code = h.lastElementChild?.nodeName === 'CODE' ? h.lastElementChild : null;
+    if (code) {
+      const dash = code.previousSibling;
+      if (dash?.nodeType === 3) dash.textContent = dash.textContent.replace(/\s*—\s*$/, '');
+      h.append(el('span', 'where', ''));
+      h.lastChild.append(code);
+    }
+    // 제목과 그 아래 목록을 카드 하나로
+    const card = el('div', 'finding');
+    h.before(card);
+    card.append(h);
+    while (card.nextSibling && !['H2', 'H3'].includes(card.nextSibling.nodeName) && !card.nextSibling.classList?.contains('finding')) card.append(card.nextSibling);
+  }
+  // "문제: …" "왜: …" 같은 머리말은 굵게
+  for (const li of root.querySelectorAll('.finding li')) {
+    const t = li.firstChild;
+    const m = t?.nodeType === 3 && t.textContent.match(/^(문제|왜|힌트|배울 것):\s*/);
+    if (m) { t.textContent = t.textContent.slice(m[0].length); li.prepend(el('span', 'lbl', m[1])); }
+  }
+}
+
+function setTitle(small, main) {
+  const t = $('panel-title');
+  t.replaceChildren();
+  if (small) t.append(el('span', 'pt-small', small));
+  t.append(el('span', 'pt-main', main));
+}
+
 function showChat() {
   currentReview = null;
-  $('panel-title').textContent = '사수와 대화';
+  panel.classList.remove('reviewing');
+  setTitle(null, '사수와 대화');
   $('review-bar').hidden = true;
   $('ask').hidden = false;
   if (log.dataset.mode === 'review') { log.innerHTML = log.dataset.chat || ''; }
@@ -160,8 +228,11 @@ async function openReview(id) {
   if (log.dataset.mode !== 'review') log.dataset.chat = log.innerHTML;
   log.dataset.mode = 'review';
   currentReview = id;
-  $('panel-title').textContent = r.meta ? `리뷰 · #${r.meta.number} ${r.meta.title}` : '리뷰';
-  log.innerHTML = r.html;
+  panel.classList.add('reviewing');
+  setTitle(r.meta ? `리뷰 · PR #${r.meta.number}` : '리뷰', r.meta ? r.meta.title : '');
+  log.innerHTML = r.html; // main 에서 이스케이프한 마크다운
+  decorateReview(log);
+  if (r.card) log.prepend(reviewSummary(r.card));
   log.scrollTop = 0;
   $('review-bar').hidden = false;
   $('ask').hidden = true;
