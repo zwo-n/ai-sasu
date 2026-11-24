@@ -332,7 +332,7 @@ test('같은 표정이 두 장이면 앞의 것만 쓴다', () => {
 });
 
 // ---------- 캐릭터 배경 지우기 ----------
-const { removeBackground } = require('../lib/cutout');
+const { removeBackground, cutoutMethod } = require('../lib/cutout');
 // BGRA 비트맵 만들기: 배경색으로 채우고 가운데 사각형만 다른 색
 function bitmap(w, h, bg, fg, box) {
   const data = Buffer.alloc(w * h * 4);
@@ -378,5 +378,20 @@ test('배경 지우기: 가장자리가 제각각인 사진이나 거의 다 지
 test('배경 지우기: 남는 칸이 모두 투명이면 그대로 둔다 (빈 그림을 만들지 않음)', () => {
   // 흰 배경 + 가운데 투명 칸만 → 가장자리 흰색을 지우면 보이는 게 없다
   const img = bitmap(20, 20, [255, 255, 255, 255], [0, 0, 0, 0], { x: 8, y: 8, w: 2, h: 2 });
+  assert.equal(removeBackground(img).changed, false);
+});
+
+test('누끼 방법 고르기: 투명하면 그대로, 단색 배경이면 색으로, 사진이면 맥 Vision', () => {
+  assert.equal(cutoutMethod(bitmap(10, 10, [0, 0, 0, 0])), 'keep');
+  assert.equal(cutoutMethod(bitmap(20, 20, [250, 252, 255, 255], [40, 80, 200, 255], { x: 5, y: 5, w: 8, h: 8 })), 'flat');
+  // 바닥 무늬처럼 가장자리 색이 제각각이면 사진으로 본다
+  const photo = bitmap(20, 20, [200, 200, 200, 255]);
+  for (let p = 0; p < 400; p++) if (p % 3 === 0) photo.data.set([120 + (p % 7) * 15, 140, 160 - (p % 5) * 10, 255], p * 4);
+  assert.equal(cutoutMethod(photo), 'photo');
+});
+
+test('배경 지우기: 가장자리가 대부분만 비슷한 사진은 색으로 지우지 않는다 (흰 강아지 털이 지워지던 문제)', () => {
+  const img = bitmap(20, 20, [235, 235, 235, 255], [90, 90, 90, 255], { x: 5, y: 5, w: 10, h: 10 });
+  for (let x = 0; x < 20; x += 2) img.data.set([150, 120, 90, 255], (19 * 20 + x) * 4); // 아래 가장자리 절반은 바닥 무늬
   assert.equal(removeBackground(img).changed, false);
 });

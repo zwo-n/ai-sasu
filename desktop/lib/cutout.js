@@ -11,16 +11,30 @@ function borderIndexes(w, h) {
   return out;
 }
 
-// 그대로 두는 경우: 이미 투명한 그림, 가장자리가 고르지 않은 사진, 거의 다 지워지거나 거의 안 지워지는 그림
-function removeBackground({ width: w, height: h, data }, { tol = 48, soft = 28 } = {}) {
-  const same = { width: w, height: h, data, changed: false };
+// 가장자리를 보고 배경이 어떤지 판단한다.
+// transparent: 이미 배경이 투명 / flat: 거의 한 가지 색(그림판 배경) / photo: 색이 제각각(사진)
+function borderKind({ width: w, height: h, data }, { flatTol = 24, flatRatio = 0.95 } = {}) {
   const border = borderIndexes(w, h);
   const opaque = border.filter(p => data[p * 4 + 3] >= 16);
-  if (opaque.length < border.length / 2) return same;
-
+  if (opaque.length < border.length / 2) return { kind: 'transparent' };
   const bg = [0, 1, 2].map(c => median(opaque.map(p => data[p * 4 + c])));
-  const seeds = opaque.filter(p => dist(data, p * 4, bg) <= tol);
-  if (seeds.length < border.length * 0.6) return same;
+  const close = opaque.filter(p => dist(data, p * 4, bg) <= flatTol).length;
+  return { kind: close >= border.length * flatRatio ? 'flat' : 'photo', bg };
+}
+
+// 어떤 방법으로 누끼를 딸지: keep(그대로) / flat(색으로 지우기) / photo(맥 Vision 피사체 따기)
+function cutoutMethod(img) {
+  const { kind } = borderKind(img);
+  return kind === 'transparent' ? 'keep' : kind;
+}
+
+// 단색 배경만 지운다. 그대로 두는 경우: 이미 투명, 가장자리가 고르지 않음(사진), 거의 다 지워지거나 거의 안 지워짐
+// 가장자리가 '대부분' 비슷한 사진(밝은 바닥 위 흰 강아지)을 지우면 털까지 지워지니 거의 한 색일 때만 한다.
+function removeBackground({ width: w, height: h, data }, { tol = 48, soft = 28 } = {}) {
+  const same = { width: w, height: h, data, changed: false };
+  const { kind, bg } = borderKind({ width: w, height: h, data });
+  if (kind !== 'flat') return same;
+  const seeds = borderIndexes(w, h).filter(p => data[p * 4 + 3] >= 16 && dist(data, p * 4, bg) <= tol);
 
   // 가장자리에서 시작해 배경색과 가까운 칸을 넓혀 간다
   const gone = new Uint8Array(w * h);
@@ -71,4 +85,4 @@ function removeBackground({ width: w, height: h, data }, { tol = 48, soft = 28 }
   return { width: cw, height: ch, data: crop, changed: true };
 }
 
-module.exports = { removeBackground };
+module.exports = { removeBackground, cutoutMethod };

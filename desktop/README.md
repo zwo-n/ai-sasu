@@ -77,6 +77,7 @@ npm test   # 로직 테스트 (AI 안 부름)
 | `lib/summary.js` | 리뷰에서 판정·지적 수 뽑기 |
 | `lib/claude.js` | `claude -p` 실행 |
 | `lib/character.js` | 고른 그림을 표정별로 나누기 |
-| `lib/cutout.js` | 캐릭터 그림 배경(누끼) 지우기 |
+| `lib/cutout.js` | 캐릭터 그림 배경(누끼) 지우기 방법 고르기·단색 배경 지우기 |
+| `native/lift-subject.js` | 사진 누끼: 맥 Vision 피사체 따기 (osascript) |
 | `lib/markdown.js` | 답변 표시 (모든 HTML 이스케이프, 링크 안 만듦) |
 | `lib/usage.js` | 하루 한도 |
