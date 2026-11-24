@@ -148,6 +148,7 @@ async function poll({ only = null, force = false } = {}) {
 // 메뉴에서 고른 PR 하나만 리뷰 (최신 커밋 기준)
 async function reviewOne(repo, number) {
   const r = await ghPRs(repo);
+  if (r.prs) { openPRs[repo] = r.prs; buildTray(); } // 고르는 김에 메뉴 목록도 새로 고친다
   const pr = r.prs?.find(p => p.number === number);
   if (!pr) {
     bubble(r.error ? `${repoName(repo)} PR 목록을 못 읽었어요: ${r.error.slice(0, 100)}` : `${repoName(repo)} PR #${number}을 찾지 못했어요. 닫혔을 수 있어요.`);
