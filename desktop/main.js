@@ -7,7 +7,7 @@ const { execFile, execFileSync } = require('node:child_process');
 
 const { withDefaults, loadJson, saveJson } = require('./lib/config');
 const { diffPRs, baselineNote, prLabel, readyCount, seenAfterPick } = require('./lib/prwatch');
-const { summarize } = require('./lib/summary');
+const { summarize, bubbleCard } = require('./lib/summary');
 const { Usage } = require('./lib/usage');
 const { runClaude, findSasuScript } = require('./lib/claude');
 const { renderMarkdown } = require('./lib/markdown');
@@ -56,8 +56,8 @@ function mood(m) {
   send('mood', state.dnd ? 'sleep' : m);
 }
 
-function bubble(text, reviewId = null) {
-  if (!state.dnd) send('bubble', { text, reviewId });
+function bubble(text, reviewId = null, card = null) {
+  if (!state.dnd) send('bubble', { text, reviewId, card });
 }
 
 // ---------- 창 ----------
@@ -197,7 +197,7 @@ async function runReview({ repo, pr, reason }) {
   buildTray();
   mood(s.mood);
   const text = `PR #${pr.number} ${pr.title}\n${s.line}${s.top ? `\n· ${s.top}` : ''}`;
-  bubble(text, id);
+  bubble(text, id, bubbleCard({ repo: repoName(repo), number: pr.number, title: pr.title }, s));
   if (Notification.isSupported()) {
     const n = new Notification({ title: `사수 리뷰: ${repoName(repo)} #${pr.number}`, body: s.line, silent: true });
     n.on('click', () => send('open-review', id));

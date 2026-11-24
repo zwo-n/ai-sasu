@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
 
-const { summarize } = require('../lib/summary');
+const { summarize, bubbleCard } = require('../lib/summary');
 const { diffPRs, baselineNote, prLabel, readyCount, seenAfterPick } = require('../lib/prwatch');
 const { Usage } = require('../lib/usage');
 const { buildArgs, runClaude, READ_ONLY_TOOLS, findSasuScript } = require('../lib/claude');
@@ -243,4 +243,24 @@ test('기준이 없는 저장소에서 골라도 열린 PR 전체로 기준을 �
   const next = seenAfterPick(undefined, prs, prs[1]);
   assert.deepEqual(next, { 1: 'a', 2: 'b' });
   assert.deepEqual(diffPRs(next, prs).toReview, []);
+});
+
+// ---------- 리뷰 말풍선 카드 ----------
+test('리뷰 말풍선 카드: 어디·제목·판정 색·개수·먼저 볼 것', () => {
+  const card = bubbleCard({ repo: 'ai-sasu', number: 3, title: 'feat: 메뉴' }, summarize(REVIEW));
+  assert.equal(card.where, 'ai-sasu · PR #3');
+  assert.equal(card.title, 'feat: 메뉴');
+  assert.equal(card.verdict, '막힘');
+  assert.equal(card.tone, 'block');
+  assert.equal(card.counts, '반드시 2 · 권장 1 · 참고 1');
+  assert.ok(card.top && !card.top.includes('`'));
+});
+
+test('판정마다 색이 다르고 지적이 없으면 개수 칸은 비운다', () => {
+  const ok = bubbleCard({ repo: 'r', number: 1, title: 't' }, summarize('## 판정\n머지 가능 — 좋아요'));
+  assert.equal(ok.tone, 'ok');
+  assert.equal(ok.counts, '');
+  assert.equal(ok.top, null);
+  assert.equal(bubbleCard({ repo: 'r', number: 1, title: 't' }, summarize('## 판정\n고친 뒤 머지')).tone, 'fix');
+  assert.equal(bubbleCard({ repo: 'r', number: 1, title: 't' }, summarize('엉망')).tone, 'unknown');
 });

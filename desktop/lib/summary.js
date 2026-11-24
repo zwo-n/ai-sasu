@@ -19,4 +19,18 @@ function summarize(md) {
   return { verdict, counts, top, mood, line };
 }
 
-module.exports = { summarize };
+// 리뷰 말풍선 카드에 들어갈 것. 화면은 textContent 로만 넣는다.
+const TONE = { 막힘: 'block', '고친 뒤 머지': 'fix', '머지 가능': 'ok' };
+
+function bubbleCard({ repo, number, title }, s) {
+  return {
+    where: `${repo} · PR #${number}`,
+    title,
+    verdict: s.verdict,
+    tone: TONE[s.verdict] || 'unknown',
+    counts: Object.entries(s.counts).filter(([, n]) => n).map(([k, n]) => `${k} ${n}`).join(' · '),
+    top: s.top,
+  };
+}
+
+module.exports = { summarize, bubbleCard };
