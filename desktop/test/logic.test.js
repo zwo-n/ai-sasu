@@ -395,3 +395,21 @@ test('배경 지우기: 가장자리가 대부분만 비슷한 사진은 색으�
   for (let x = 0; x < 20; x += 2) img.data.set([150, 120, 90, 255], (19 * 20 + x) * 4); // 아래 가장자리 절반은 바닥 무늬
   assert.equal(removeBackground(img).changed, false);
 });
+
+// ---------- 첫 인사 ----------
+const { greeting } = require('../lib/greeting');
+
+test('첫 인사: 이름이 있으면 "○○님의 PR"', () => {
+  assert.equal(greeting({ me: '지원', hasRepos: true }), '안녕하세요, 사수예요. 코드 얘기면 뭐든 물어보세요. 지원님의 PR이 올라오면 제가 먼저 볼게요.');
+  assert.match(greeting({ me: 'zwo-n', hasRepos: true }), /zwo-n님의 PR이/);
+});
+
+test('첫 인사: 이름을 모르면 "올리신 PR", 저장소가 없으면 추가 안내', () => {
+  assert.match(greeting({ me: null, hasRepos: true }), /올리신 PR이 올라오면|PR을 올리시면/);
+  assert.match(greeting({ me: '지원', hasRepos: false }), /저장소 추가…/);
+});
+
+test('첫 인사: 이름은 앞뒤 공백을 빼고 20자까지', () => {
+  assert.match(greeting({ me: '  지원  ', hasRepos: true }), / 지원님의 PR/);
+  assert.match(greeting({ me: 'x'.repeat(40), hasRepos: true }), new RegExp(`${'x'.repeat(20)}님의 PR`));
+});

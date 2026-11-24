@@ -295,9 +295,7 @@ async function load() {
   const onlyGreeting = log.dataset.mode !== 'review' && [...log.children].every(c => c.classList.contains('greet'));
   if (onlyGreeting) {
     log.innerHTML = '';
-    add('sasu greet', info.repos.length
-      ? '<p>안녕하세요, 사수예요. 코드 얘기면 뭐든 물어보세요. 내 PR이 올라오면 제가 먼저 볼게요.</p>'
-      : '<p>안녕하세요, 사수예요. 메뉴 막대의 <strong>사수 → 저장소 추가…</strong>로 지켜볼 저장소를 알려 주세요.</p>');
+    add('sasu greet', info.greeting, true); // 이름이 들어가니 글자로만 넣는다
   }
 }
 
