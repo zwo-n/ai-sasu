@@ -6,6 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 AGENT = ROOT / "agents" / "senior-dev.md"
+CHECKER = ROOT / "agents" / "review-checker.md"
 SKILLS = sorted((ROOT / "skills").glob("*/SKILL.md"))
 EXPECTED_SKILLS = {"onboard", "review", "debug", "ask", "design", "growth"}
 SCRIPT_CMDS = {"init", "ask-log", "open", "answer", "search", "lesson", "report"}
@@ -85,6 +86,25 @@ class TestDocsMatchScript(unittest.TestCase):
             for t in re.findall(r'--topic\s+"([^"]+)"', p.read_text(encoding="utf-8")):
                 with self.subTest(file=p.name, topic=t):
                     self.assertIn(t, topics)
+
+
+class TestReviewChecker(unittest.TestCase):
+    """[반드시] 지적은 기록·판정 전에 다른 눈(review-checker)이 다시 확인한다."""
+
+    def test_checker_agent_is_read_only(self):
+        fm, body = frontmatter(CHECKER)
+        self.assertEqual(fm.get("name"), "review-checker")
+        tools = {t.strip() for t in fm.get("tools", "").split(",")}
+        self.assertTrue(tools, "tools 를 적어 범위를 좁힌다")
+        self.assertFalse(tools & {"Edit", "Write", "NotebookEdit", "WebFetch", "WebSearch"})
+        for verdict in ("확인됨", "틀림", "불확실"):
+            self.assertIn(verdict, body)
+
+    def test_review_calls_checker_before_recording(self):
+        text = (ROOT / "skills" / "review" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("sasu:review-checker", text)
+        self.assertLess(text.index("sasu:review-checker"), text.index("## 4. 기록"),
+                        "틀린 지적이 성장 기록에 남지 않게 기록보다 먼저 확인한다")
 
 
 if __name__ == "__main__":
