@@ -1,0 +1,13 @@
+{
+  "name": "ai-sasu",
+  "owner": { "name": "AMBETRI" },
+  "metadata": { "description": "AI 사수 팀 설치용 마켓플레이스" },
+  "plugins": [
+    {
+      "name": "sasu",
+      "source": "./",
+      "description": "주니어 개발자 팀을 위한 시니어 개발자 사수",
+      "version": "0.1.0"
+    }
+  ]
+}
