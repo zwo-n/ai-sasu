@@ -64,13 +64,18 @@ function el(tag, cls, text) {
   return e;
 }
 function reviewCard(c) {
-  const head = el('div', 'b-verdict');
-  head.append(el('span', `chip tone-${c.tone}`, c.verdict));
-  if (c.counts) head.append(el('span', 'b-counts', c.counts));
-  const parts = [el('div', 'b-where', c.where), el('div', 'b-title', c.title), head];
+  const head = el('div', 'b-head');
+  head.append(el('span', 'b-where', c.where), el('span', `chip tone-${c.tone}`, c.verdict));
+  const stats = el('div', 'b-stats');
+  for (const st of c.stats) {
+    const box = el('div', `stat ${st.kind}${st.n ? '' : ' zero'}`);
+    box.append(el('b', '', String(st.n)), el('span', '', st.label));
+    stats.append(box);
+  }
+  const parts = [head, el('div', 'b-title', c.title), stats];
   if (c.top) {
     const top = el('div', 'b-top');
-    top.append(el('span', 'b-label', '먼저 볼 것'), el('span', 'b-top-text', c.top));
+    top.append(el('span', 'b-label', c.topLabel), el('span', 'b-top-text', c.top));
     parts.push(top);
   }
   parts.push(el('div', 'b-more', '눌러서 전체 리뷰 보기'));

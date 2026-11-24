@@ -13,30 +13,43 @@ const { withDefaults } = require('../lib/config');
 // ---------- 리뷰 요약 ----------
 const REVIEW = `## 잘한 점
 - 파라미터 바인딩을 썼어요
+- 함수 이름이 하는 일을 잘 말해요
 
-## 고칠 점
+## 아쉬운 점
+### 1. [권장] 환불 테스트가 없어요 — \`tests/\`
+### 2. [참고] 연결을 닫지 않아요 — \`shop/refund.py:5\`
+
+## 꼭 고칠 점
 ### 1. [반드시] 환불이 실패해도 "환불됨"으로 처리돼요 — \`shop/refund.py:11-14\`
 - 문제: ...
 ### 2. [반드시] SQL을 문자열로 이어 붙였어요 — \`shop/refund.py:7\`
-### 3. [권장] 환불 테스트가 없어요 — \`tests/\`
-### 4. [참고] 연결을 닫지 않아요 — \`shop/refund.py:5\`
 
 ## 판정
 **막힘** — 환불 실패를 숨겨요.
 `;
 
-test('요약: 판정과 등급별 개수, 첫 지적', () => {
+test('요약: 판정, 등급별 개수, 잘한 점 개수', () => {
   const s = summarize(REVIEW);
   assert.equal(s.verdict, '막힘');
   assert.deepEqual(s.counts, { 반드시: 2, 권장: 1, 참고: 1 });
-  assert.match(s.top, /환불이 실패해도/);
+  assert.equal(s.good, 2);
   assert.equal(s.mood, 'warn');
+});
+
+test('요약: 먼저 볼 것은 순서와 상관없이 가장 심각한 지적', () => {
+  const s = summarize(REVIEW);
+  assert.match(s.top, /환불이 실패해도/);
+  assert.equal(s.topLevel, '반드시');
+  const t = summarize('### 1. [참고] 이름\n### 2. [권장] 테스트 없음 — `t/`\n## 판정\n고친 뒤 머지');
+  assert.equal(t.top, '테스트 없음');
+  assert.equal(t.topLevel, '권장');
 });
 
 test('요약: 지적 없음 + 머지 가능이면 happy', () => {
   const s = summarize('## 판정\n머지 가능 — 깔끔해요\n');
   assert.equal(s.verdict, '머지 가능');
   assert.deepEqual(s.counts, { 반드시: 0, 권장: 0, 참고: 0 });
+  assert.equal(s.good, 0);
   assert.equal(s.top, null);
   assert.equal(s.mood, 'happy');
 });
@@ -51,8 +64,14 @@ test('요약: 판정을 못 찾으면 알 수 없음', () => {
   assert.equal(s.mood, 'idle');
 });
 
-test('요약: 한 줄 말풍선 문구', () => {
-  assert.equal(summarize(REVIEW).line, '막힘 · 반드시 2 · 권장 1 · 참고 1');
+test('요약: 한 줄 문구는 판정 · 꼭 고칠 점 · 아쉬운 점 (메뉴·알림용)', () => {
+  assert.equal(summarize(REVIEW).line, '막힘 · 꼭 고칠 점 2 · 아쉬운 점 2');
+  assert.equal(summarize('### 1. [참고] x\n## 판정\n머지 가능').line, '머지 가능 · 아쉬운 점 1');
+});
+
+test('요약: 예전 형식(## 고칠 점)도 읽는다', () => {
+  const s = summarize('## 고칠 점\n### 1. [반드시] 버그 — `a.js:1`\n## 판정\n막힘');
+  assert.deepEqual(s.counts, { 반드시: 1, 권장: 0, 참고: 0 });
 });
 
 // ---------- PR 감지 ----------
@@ -246,21 +265,27 @@ test('기준이 없는 저장소에서 골라도 열린 PR 전체로 기준을 �
 });
 
 // ---------- 리뷰 말풍선 카드 ----------
-test('리뷰 말풍선 카드: 어디·제목·판정 색·개수·먼저 볼 것', () => {
+test('리뷰 말풍선 카드: 어디·제목·판정 색·세 칸 개수·먼저 볼 것', () => {
   const card = bubbleCard({ repo: 'ai-sasu', number: 3, title: 'feat: 메뉴' }, summarize(REVIEW));
   assert.equal(card.where, 'ai-sasu · PR #3');
   assert.equal(card.title, 'feat: 메뉴');
   assert.equal(card.verdict, '막힘');
   assert.equal(card.tone, 'block');
-  assert.equal(card.counts, '반드시 2 · 권장 1 · 참고 1');
+  assert.deepEqual(card.stats, [
+    { label: '잘한 점', n: 2, kind: 'good' },
+    { label: '아쉬운 점', n: 2, kind: 'soft' },
+    { label: '꼭 고칠 점', n: 2, kind: 'must' },
+  ]);
+  assert.equal(card.topLabel, '꼭 고칠 점부터');
   assert.ok(card.top && !card.top.includes('`'));
 });
 
-test('판정마다 색이 다르고 지적이 없으면 개수 칸은 비운다', () => {
+test('판정마다 색이 다르고, 먼저 볼 것 제목은 등급을 따른다', () => {
   const ok = bubbleCard({ repo: 'r', number: 1, title: 't' }, summarize('## 판정\n머지 가능 — 좋아요'));
   assert.equal(ok.tone, 'ok');
-  assert.equal(ok.counts, '');
   assert.equal(ok.top, null);
-  assert.equal(bubbleCard({ repo: 'r', number: 1, title: 't' }, summarize('## 판정\n고친 뒤 머지')).tone, 'fix');
+  const fix = bubbleCard({ repo: 'r', number: 1, title: 't' }, summarize('### 1. [권장] 테스트 없음\n## 판정\n고친 뒤 머지'));
+  assert.equal(fix.tone, 'fix');
+  assert.equal(fix.topLabel, '아쉬운 점');
   assert.equal(bubbleCard({ repo: 'r', number: 1, title: 't' }, summarize('엉망')).tone, 'unknown');
 });

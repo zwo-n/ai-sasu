@@ -107,5 +107,17 @@ class TestReviewChecker(unittest.TestCase):
                         "틀린 지적이 성장 기록에 남지 않게 기록보다 먼저 확인한다")
 
 
+class TestReviewFormat(unittest.TestCase):
+    def test_review_sections_match_desktop_summary(self):
+        # desktop/lib/summary.js 가 이 칸 이름과 "### 번호. [등급]"을 읽어 말풍선을 만든다
+        text = (ROOT / "skills" / "review" / "SKILL.md").read_text(encoding="utf-8")
+        for h in ("## 잘한 점", "## 아쉬운 점", "## 꼭 고칠 점", "## 판정"):
+            self.assertIn(h, text)
+        self.assertLess(text.index("## 아쉬운 점"), text.index("## 꼭 고칠 점"))
+        self.assertNotIn("## 문제점", text)
+        summary = (ROOT / "desktop" / "lib" / "summary.js").read_text(encoding="utf-8")
+        self.assertIn("'잘한 점'", summary)
+
+
 if __name__ == "__main__":
     unittest.main()
