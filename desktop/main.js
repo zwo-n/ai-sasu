@@ -139,13 +139,29 @@ async function pickCharacter() {
   const { plan, skipped } = planImport(r.filePaths.map(p => ({ path: p, size: fs.statSync(p).size })));
   const why = skipped.map(x => `· ${path.basename(x.file)}: ${x.reason}`).join('\n');
   if (!plan) { dialog.showErrorBox('캐릭터를 바꾸지 못했어요', why || '쓸 수 있는 그림이 없어요.'); return; }
+  // 새 폴더를 옆에 다 만든 뒤 갈아 끼운다: 기존 것을 .old 로 옮기고 → 새것을 넣고 → .old 정리.
+  // 어느 단계에서 실패해도 기존 캐릭터가 남는다.
   const tmp = MY_CHAR_DIR + '.new';
-  fs.rmSync(tmp, { recursive: true, force: true });
-  fs.mkdirSync(tmp, { recursive: true });
+  const old = MY_CHAR_DIR + '.old';
   let cut = 0;
-  for (const [mood, src] of Object.entries(plan)) cut += cutout(src, path.join(tmp, mood)) ? 1 : 0;
-  fs.rmSync(MY_CHAR_DIR, { recursive: true, force: true });
-  fs.renameSync(tmp, MY_CHAR_DIR);
+  try {
+    fs.rmSync(tmp, { recursive: true, force: true });
+    fs.mkdirSync(tmp, { recursive: true });
+    for (const [mood, src] of Object.entries(plan)) cut += cutout(src, path.join(tmp, mood)) ? 1 : 0;
+    fs.rmSync(old, { recursive: true, force: true });
+    if (fs.existsSync(MY_CHAR_DIR)) fs.renameSync(MY_CHAR_DIR, old);
+    try {
+      fs.renameSync(tmp, MY_CHAR_DIR);
+    } catch (e) {
+      if (fs.existsSync(old)) fs.renameSync(old, MY_CHAR_DIR); // 되돌리기
+      throw e;
+    }
+    fs.rmSync(old, { recursive: true, force: true });
+  } catch (e) {
+    fs.rmSync(tmp, { recursive: true, force: true });
+    dialog.showErrorBox('캐릭터를 바꾸지 못했어요', `그림을 처리하다 문제가 생겼어요. 지금 캐릭터는 그대로예요.\n${e.message}`);
+    return;
+  }
   useCharacter(MY_CHAR_DIR);
   const n = Object.keys(plan).length;
   bubble(`새 모습이에요! 표정 ${n}개를 넣었어요.${cut ? ` 배경 ${cut}장을 지웠어요.` : ''}${n < 5 ? ' 없는 표정은 평소 그림으로 보여요.' : ''}${why ? '\n건너뛴 그림:\n' + why : ''}`);

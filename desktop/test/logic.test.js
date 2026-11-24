@@ -369,3 +369,9 @@ test('배경 지우기: 가장자리가 제각각인 사진이나 거의 다 지
   const flat = bitmap(10, 10, [255, 255, 255, 255]); // 전부 배경
   assert.equal(removeBackground(flat).changed, false);
 });
+
+test('배경 지우기: 남는 칸이 모두 투명이면 그대로 둔다 (빈 그림을 만들지 않음)', () => {
+  // 흰 배경 + 가운데 투명 칸만 → 가장자리 흰색을 지우면 보이는 게 없다
+  const img = bitmap(20, 20, [255, 255, 255, 255], [0, 0, 0, 0], { x: 8, y: 8, w: 2, h: 2 });
+  assert.equal(removeBackground(img).changed, false);
+});

@@ -58,6 +58,8 @@ function removeBackground({ width: w, height: h, data }, { tol = 48, soft = 28 }
     }
   }
 
+  if (maxX < 0) return same; // 보이는 칸이 하나도 안 남으면 빈 그림을 만들지 않는다
+
   // 빈 여백을 잘라 캐릭터가 칸을 꽉 채우게
   const cw = maxX - minX + 1;
   const ch = maxY - minY + 1;
