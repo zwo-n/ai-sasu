@@ -29,12 +29,15 @@ function removeBackground({ width: w, height: h, data }, { tol = 48, soft = 28 }
   while (stack.length) {
     const p = stack.pop();
     const x = p % w;
-    for (const q of [x > 0 ? p - 1 : -1, x < w - 1 ? p + 1 : -1, p - w, p + w]) {
-      if (q < 0 || q >= w * h || gone[q]) continue;
-      if (data[q * 4 + 3] >= 16 && dist(data, q * 4, bg) > tol) continue;
+    const visit = q => {
+      if (gone[q] || (data[q * 4 + 3] >= 16 && dist(data, q * 4, bg) > tol)) return;
       gone[q] = 1;
       stack.push(q);
-    }
+    };
+    if (x > 0) visit(p - 1);
+    if (x < w - 1) visit(p + 1);
+    if (p >= w) visit(p - w);
+    if (p < w * (h - 1)) visit(p + w);
   }
   const removed = gone.reduce((n, v) => n + v, 0) / (w * h);
   if (removed > 0.97 || removed < 0.005) return same;

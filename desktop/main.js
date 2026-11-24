@@ -119,10 +119,11 @@ function cutout(src, destNoExt) {
   const ext = path.extname(src).toLowerCase();
   const img = ['.png', '.jpg', '.jpeg', '.webp'].includes(ext) ? nativeImage.createFromPath(src) : null;
   if (!img || img.isEmpty()) { fs.copyFileSync(src, destNoExt + ext); return false; }
-  const { width, height } = img.getSize();
-  const r = removeBackground({ width, height, data: img.toBitmap() });
-  let out = r.changed ? nativeImage.createFromBitmap(r.data, { width: r.width, height: r.height }) : img;
-  if (out.getSize().height > 528) out = out.resize({ height: 528, quality: 'best' });
+  // 먼저 화면에 쓸 크기로 줄인다. 큰 사진을 그대로 계산하면 메인 스레드(메뉴·말풍선)가 오래 멈춘다
+  const small = img.getSize().height > 528 ? img.resize({ height: 528, quality: 'best' }) : img;
+  const { width, height } = small.getSize();
+  const r = removeBackground({ width, height, data: small.toBitmap() });
+  const out = r.changed ? nativeImage.createFromBitmap(r.data, { width: r.width, height: r.height }) : small;
   fs.writeFileSync(destNoExt + '.png', out.toPNG());
   return r.changed;
 }
@@ -156,12 +157,12 @@ async function pickCharacter() {
       if (fs.existsSync(old)) fs.renameSync(old, MY_CHAR_DIR); // 되돌리기
       throw e;
     }
-    fs.rmSync(old, { recursive: true, force: true });
   } catch (e) {
     fs.rmSync(tmp, { recursive: true, force: true });
     dialog.showErrorBox('캐릭터를 바꾸지 못했어요', `그림을 처리하다 문제가 생겼어요. 지금 캐릭터는 그대로예요.\n${e.message}`);
     return;
   }
+  try { fs.rmSync(old, { recursive: true, force: true }); } catch { /* 새 캐릭터는 이미 들어갔다. 남은 .old 는 다음에 지운다 */ }
   useCharacter(MY_CHAR_DIR);
   const n = Object.keys(plan).length;
   bubble(`새 모습이에요! 표정 ${n}개를 넣었어요.${cut ? ` 배경 ${cut}장을 지웠어요.` : ''}${n < 5 ? ' 없는 표정은 평소 그림으로 보여요.' : ''}${why ? '\n건너뛴 그림:\n' + why : ''}`);
