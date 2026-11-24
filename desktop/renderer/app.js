@@ -81,34 +81,57 @@ function reviewCard(c) {
   parts.push(el('div', 'b-more', '눌러서 전체 리뷰 보기'));
   return parts;
 }
-function showBubble({ text, reviewId, card }) {
-  if (card) bubbleEl.replaceChildren(...reviewCard(card));
-  else bubbleEl.textContent = text;
-  bubbleEl.classList.toggle('card', Boolean(card));
-  bubbleEl.classList.toggle('has-review', Boolean(reviewId));
-  bubbleEl.dataset.review = reviewId || '';
-  bubbleEl.hidden = !panel.hidden; // 대화창이 열려 있으면 말풍선은 숨긴다
+// 말풍선 내용. 대화창이 열려 있으면 말풍선 자리가 가려지니, 같은 내용을 대화창 위쪽 알림(#notice)에도 띄운다.
+const notice = $('notice');
+let bubbleLive = false; // 아직 사라질 시간이 안 된 말풍선이 있나
+function fill(target, { text, reviewId, card }) {
+  if (card) target.replaceChildren(...reviewCard(card));
+  else target.textContent = text;
+  target.classList.toggle('card', Boolean(card));
+  target.classList.toggle('has-review', Boolean(reviewId));
+  target.dataset.review = reviewId || '';
+}
+function showBubble(msg) {
+  fill(bubbleEl, msg);
+  bubbleLive = true;
+  if (panel.hidden) bubbleEl.hidden = false;
+  else { fill(notice, msg); notice.hidden = false; }
   clearTimeout(bubbleTimer);
-  bubbleTimer = setTimeout(hideBubble, reviewId ? 60000 : 12000);
+  bubbleTimer = setTimeout(hideBubble, msg.reviewId ? 60000 : 12000);
 }
 function hideBubble() {
+  bubbleLive = false;
   bubbleEl.hidden = true;
+  notice.hidden = true;
   if (['warn', 'happy'].includes(buddy.dataset.mood)) setMood('idle');
 }
-bubbleEl.addEventListener('click', () => {
+function clickBubble(e) {
+  const id = e.currentTarget.dataset.review;
   hideBubble();
-  if (bubbleEl.dataset.review) openReview(bubbleEl.dataset.review);
+  if (id) openReview(id);
   else openPanel();
-});
+}
+bubbleEl.addEventListener('click', clickBubble);
+notice.addEventListener('click', clickBubble);
 
 // ---------- 대화창 ----------
 function openPanel() {
+  if (bubbleLive && !bubbleEl.hidden) { // 떠 있던 말풍선은 대화창 위쪽 알림으로 옮긴다
+    notice.replaceChildren(...[...bubbleEl.childNodes].map(n => n.cloneNode(true)));
+    notice.className = bubbleEl.className;
+    notice.dataset.review = bubbleEl.dataset.review;
+    notice.hidden = false;
+  }
   panel.hidden = false;
   bubbleEl.hidden = true;
   window.sasu.focus();
   setTimeout(() => input.focus(), 50);
 }
-function closePanel() { panel.hidden = true; }
+function closePanel() {
+  panel.hidden = true;
+  notice.hidden = true;
+  if (bubbleLive) bubbleEl.hidden = false; // 아직 볼 때가 남은 말풍선은 다시 보여 준다
+}
 function togglePanel() { panel.hidden ? openPanel() : closePanel(); }
 
 function add(cls, html, isText = false) {
