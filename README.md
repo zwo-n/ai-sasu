@@ -73,6 +73,10 @@ python3 scripts/sasu.py answer Q-7f3a "결제 후 7일까지" --by 팀장
 python3 scripts/sasu.py report --who 민지 --days 7
 ```
 
+## 데스크톱 캐릭터 (맥)
+
+화면 아래에 사수 캐릭터를 띄워 두고, 눌러서 대화하거나 내 PR이 올라오면 바로 리뷰를 받습니다. → [desktop/README.md](desktop/README.md)
+
 ## 사수의 원칙
 
 `agents/senior-dev.md`에 있습니다. 모든 기능이 이 파일을 읽고 따르므로, 사수 성격을 바꾸려면 이 파일 하나만 고치면 됩니다.
