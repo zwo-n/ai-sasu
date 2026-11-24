@@ -6,6 +6,8 @@
 - **내 PR을 리뷰**: 지켜보는 저장소에 내 PR이 새로 열리거나 새 커밋이 푸시되면 `/sasu:review`를 돌립니다. 결과는 판정·지적 수·먼저 볼 것을 담은 말풍선과 맥 알림으로 오고, 누르면 전체 리뷰를 봅니다.
 - **표정**: 평소 · 생각 중(책 읽기) · 경고(판정 "막힘", 놀람) · 칭찬(판정 "머지 가능", 신남) · 잠(방해 금지)
 - **끌어서 옮기기**: 캐릭터를 끌면 자리가 바뀌고, 그 자리를 기억합니다.
+- **캐릭터 바꾸기**: 메뉴 막대 **사수 → 캐릭터 → 그림 골라서 바꾸기…** 배경은 자동으로 지웁니다 → [characters/README.md](characters/README.md)
+- **대화창을 열어 둔 채 리뷰가 끝나면** 결과 카드가 대화창 위쪽에 뜹니다. 대화창을 닫으면 말풍선으로 다시 보입니다.
 
 ## 준비
 
@@ -54,7 +56,7 @@ PR 확인(`gh pr list`), 리뷰 요약, 표정 바꾸기는 AI를 쓰지 않습�
 | `reviewModel` / `chatModel` | `sonnet` | 리뷰·대화 모델 (`haiku`로 바꾸면 사용량이 줄어듦) |
 | `dailyLimit` | 30 | 하루 AI 호출 한도 |
 | `reviewDrafts` | `false` | 드래프트 PR도 리뷰할지 |
-| `characterDir` | `null` | 내 캐릭터 그림 폴더. 비우면 엔젤이 → [characters/README.md](characters/README.md) |
+| `characterDir` | `null` | 캐릭터 그림 폴더. 메뉴에서 고르면 자동으로 채워짐. 비우면 엔젤이 |
 | `claudePath` / `ghPath` / `sasuScript` | `null` | 명령·장부 위치를 직접 지정할 때 |
 
 리뷰 원문은 `~/Library/Application Support/sasu-buddy/reviews/`에 남습니다.
@@ -74,5 +76,7 @@ npm test   # 로직 테스트 (AI 안 부름)
 | `lib/prwatch.js` | 리뷰할 PR 고르기 (새 PR·새 푸시, 드래프트 제외) |
 | `lib/summary.js` | 리뷰에서 판정·지적 수 뽑기 |
 | `lib/claude.js` | `claude -p` 실행 |
+| `lib/character.js` | 고른 그림을 표정별로 나누기 |
+| `lib/cutout.js` | 캐릭터 그림 배경(누끼) 지우기 |
 | `lib/markdown.js` | 답변 표시 (모든 HTML 이스케이프, 링크 안 만듦) |
 | `lib/usage.js` | 하루 한도 |

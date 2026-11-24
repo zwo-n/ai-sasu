@@ -289,3 +289,83 @@ test('판정마다 색이 다르고, 먼저 볼 것 제목은 등급을 따른�
   assert.equal(fix.topLabel, '아쉬운 점');
   assert.equal(bubbleCard({ repo: 'r', number: 1, title: 't' }, summarize('엉망')).tone, 'unknown');
 });
+
+// ---------- 내 캐릭터 그림 ----------
+const { planImport } = require('../lib/character');
+const f = (p, size = 1000) => ({ path: p, size });
+
+test('그림 한 장이면 평소 표정이 되고, 나머지 표정도 그 그림으로 보인다', () => {
+  const { plan, skipped } = planImport([f('/a/고양이.png')]);
+  assert.deepEqual(plan, { idle: '/a/고양이.png' });
+  assert.deepEqual(skipped, []);
+});
+
+test('여러 장이면 파일 이름(영어·한국어)으로 표정을 나눈다', () => {
+  const { plan } = planImport([f('/a/cat_happy.png'), f('/a/고양이-졸림.webp'), f('/a/cat idle.PNG'), f('/a/생각중.gif'), f('/a/놀람.jpg')]);
+  assert.deepEqual(plan, {
+    happy: '/a/cat_happy.png', sleep: '/a/고양이-졸림.webp', idle: '/a/cat idle.PNG', thinking: '/a/생각중.gif', warn: '/a/놀람.jpg',
+  });
+});
+
+test('표정을 모르는 첫 장은 평소, 그다음부터는 건너뛰고 이유를 알려 준다', () => {
+  const { plan, skipped } = planImport([f('/a/one.png'), f('/a/two.png'), f('/a/happy.png')]);
+  assert.deepEqual(plan, { idle: '/a/one.png', happy: '/a/happy.png' });
+  assert.equal(skipped.length, 1);
+  assert.match(skipped[0].reason, /어느 표정인지/);
+});
+
+test('그림이 아니거나 너무 크면 건너뛰고, 쓸 그림이 없으면 plan 은 null', () => {
+  const { plan, skipped } = planImport([f('/a/note.txt'), f('/a/big.png', 6 * 1024 * 1024)]);
+  assert.equal(plan, null);
+  assert.deepEqual(skipped.map(s => s.reason), ['그림 파일이 아니에요', '5MB가 넘어요']);
+});
+
+test('같은 표정이 두 장이면 앞의 것만 쓴다', () => {
+  const { plan, skipped } = planImport([f('/a/happy1.png'), f('/a/happy2.png')]);
+  assert.deepEqual(plan, { idle: '/a/happy1.png', happy: '/a/happy1.png' }); // 평소 그림이 없으면 첫 장을 평소로
+  assert.match(skipped[0].reason, /이미/);
+});
+
+// ---------- 캐릭터 배경 지우기 ----------
+const { removeBackground } = require('../lib/cutout');
+// BGRA 비트맵 만들기: 배경색으로 채우고 가운데 사각형만 다른 색
+function bitmap(w, h, bg, fg, box) {
+  const data = Buffer.alloc(w * h * 4);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const inBox = box && x >= box.x && x < box.x + box.w && y >= box.y && y < box.y + box.h;
+    const [b, g, r, a] = inBox ? fg : bg;
+    data.set([b, g, r, a], (y * w + x) * 4);
+  }
+  return { width: w, height: h, data };
+}
+const alphaAt = (img, x, y) => img.data[(y * img.width + x) * 4 + 3];
+
+test('배경 지우기: 가장자리에 붙은 단색 배경은 투명, 캐릭터는 그대로, 여백은 잘라 낸다', () => {
+  const img = bitmap(20, 20, [255, 255, 255, 255], [40, 80, 200, 255], { x: 5, y: 6, w: 8, h: 10 });
+  const out = removeBackground(img);
+  assert.equal(out.changed, true);
+  assert.equal(out.width, 8);
+  assert.equal(out.height, 10);
+  assert.equal(alphaAt(out, 0, 0), 255); // 잘라 낸 뒤 왼쪽 위는 캐릭터
+});
+
+test('배경 지우기: 캐릭터 안쪽의 배경색은 지우지 않는다 (가장자리와 이어진 것만)', () => {
+  const img = bitmap(20, 20, [255, 255, 255, 255], [40, 80, 200, 255], { x: 4, y: 4, w: 12, h: 12 });
+  // 캐릭터 가운데에 흰 점(눈 흰자 같은 것)
+  img.data.set([255, 255, 255, 255], (10 * 20 + 10) * 4);
+  const out = removeBackground(img);
+  assert.equal(alphaAt(out, 6, 6), 255); // 잘린 좌표로 (10,10) → (6,6)
+});
+
+test('배경 지우기: 이미 투명한 그림은 손대지 않는다', () => {
+  const img = bitmap(10, 10, [0, 0, 0, 0], [40, 80, 200, 255], { x: 2, y: 2, w: 5, h: 5 });
+  assert.equal(removeBackground(img).changed, false);
+});
+
+test('배경 지우기: 가장자리가 제각각인 사진이나 거의 다 지워지는 그림은 그대로 둔다', () => {
+  const noisy = bitmap(10, 10, [255, 255, 255, 255]);
+  for (let i = 0; i < 100; i++) noisy.data.set([(i * 53) % 256, (i * 97) % 256, (i * 31) % 256, 255], i * 4);
+  assert.equal(removeBackground(noisy).changed, false);
+  const flat = bitmap(10, 10, [255, 255, 255, 255]); // 전부 배경
+  assert.equal(removeBackground(flat).changed, false);
+});
