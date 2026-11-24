@@ -8,6 +8,8 @@ const { execFile, execFileSync } = require('node:child_process');
 const { withDefaults, loadJson, saveJson } = require('./lib/config');
 const { diffPRs, baselineNote, prLabel, readyCount, seenAfterPick } = require('./lib/prwatch');
 const { summarize, bubbleCard } = require('./lib/summary');
+const { IMAGE_TYPES, planImport } = require('./lib/character');
+const { removeBackground } = require('./lib/cutout');
 const { Usage } = require('./lib/usage');
 const { runClaude, findSasuScript } = require('./lib/claude');
 const { renderMarkdown } = require('./lib/markdown');
@@ -18,6 +20,7 @@ if (!app.requestSingleInstanceLock()) app.quit();
 
 const DATA = app.getPath('userData');
 const CONFIG_FILE = path.join(DATA, 'config.json');
+const MY_CHAR_DIR = path.join(DATA, 'character'); // 메뉴에서 고른 내 캐릭터 그림을 복사해 두는 곳
 const STATE_FILE = path.join(DATA, 'state.json');
 const REVIEW_DIR = path.join(DATA, 'reviews');
 const W = 380;
@@ -90,15 +93,92 @@ function resetPosition() {
 // 그림이 하나도 없으면 renderer 의 SVG 캐릭터를 쓴다.
 function characterImages() {
   const dir = config.characterDir || path.join(__dirname, 'characters', 'angel');
-  const types = { '.png': 'image/png', '.gif': 'image/gif', '.svg': 'image/svg+xml', '.webp': 'image/webp' };
   const out = {};
   for (const m of MOODS) {
-    for (const [ext, mime] of Object.entries(types)) {
+    for (const [ext, mime] of Object.entries(IMAGE_TYPES)) {
       const f = path.join(dir, m + ext);
       if (fs.existsSync(f)) { out[m] = `data:${mime};base64,${fs.readFileSync(f).toString('base64')}`; break; }
     }
   }
   return out.idle ? out : null; // idle 이 없으면 기본 캐릭터
+}
+
+// ---------- 캐릭터 바꾸기 (메뉴) ----------
+const hasIdle = dir => Object.keys(IMAGE_TYPES).some(ext => fs.existsSync(path.join(dir, 'idle' + ext)));
+
+function useCharacter(dir) {
+  config.characterDir = dir;
+  saveJson(CONFIG_FILE, config);
+  send('reload');
+  buildTray();
+}
+
+// 그림 한 장을 내 캐릭터 폴더에 넣는다. png·jpg·webp 는 배경(누끼)을 지우고 여백을 잘라 png 로, gif·svg 는 그대로.
+// 화면에는 240×264 로 보이니 너무 큰 그림은 줄인다. 배경을 지웠으면 true.
+function cutout(src, destNoExt) {
+  const ext = path.extname(src).toLowerCase();
+  const img = ['.png', '.jpg', '.jpeg', '.webp'].includes(ext) ? nativeImage.createFromPath(src) : null;
+  if (!img || img.isEmpty()) { fs.copyFileSync(src, destNoExt + ext); return false; }
+  // 먼저 화면에 쓸 크기로 줄인다. 큰 사진을 그대로 계산하면 메인 스레드(메뉴·말풍선)가 오래 멈춘다
+  const small = img.getSize().height > 528 ? img.resize({ height: 528, quality: 'best' }) : img;
+  const { width, height } = small.getSize();
+  const r = removeBackground({ width, height, data: small.toBitmap() });
+  const out = r.changed ? nativeImage.createFromBitmap(r.data, { width: r.width, height: r.height }) : small;
+  fs.writeFileSync(destNoExt + '.png', out.toPNG());
+  return r.changed;
+}
+
+// 그림을 골라 표정별로 나눠 내 캐릭터 폴더에 복사한다. 원본을 옮기거나 지워도 그대로 보이게.
+async function pickCharacter() {
+  const r = await dialog.showOpenDialog({
+    title: '캐릭터 그림 고르기',
+    message: '한 장이면 모든 표정에 씁니다. 여러 장이면 파일 이름(idle·thinking·warn·happy·sleep 또는 기본·생각·놀람·신남·졸림)으로 나눕니다.',
+    properties: ['openFile', 'multiSelections'],
+    filters: [{ name: '그림', extensions: Object.keys(IMAGE_TYPES).map(e => e.slice(1)) }],
+  });
+  if (r.canceled || !r.filePaths.length) return;
+  const { plan, skipped } = planImport(r.filePaths.map(p => ({ path: p, size: fs.statSync(p).size })));
+  const why = skipped.map(x => `· ${path.basename(x.file)}: ${x.reason}`).join('\n');
+  if (!plan) { dialog.showErrorBox('캐릭터를 바꾸지 못했어요', why || '쓸 수 있는 그림이 없어요.'); return; }
+  // 새 폴더를 옆에 다 만든 뒤 갈아 끼운다: 기존 것을 .old 로 옮기고 → 새것을 넣고 → .old 정리.
+  // 어느 단계에서 실패해도 기존 캐릭터가 남는다.
+  const tmp = MY_CHAR_DIR + '.new';
+  const old = MY_CHAR_DIR + '.old';
+  let cut = 0;
+  try {
+    fs.rmSync(tmp, { recursive: true, force: true });
+    fs.mkdirSync(tmp, { recursive: true });
+    for (const [mood, src] of Object.entries(plan)) cut += cutout(src, path.join(tmp, mood)) ? 1 : 0;
+    fs.rmSync(old, { recursive: true, force: true });
+    if (fs.existsSync(MY_CHAR_DIR)) fs.renameSync(MY_CHAR_DIR, old);
+    try {
+      fs.renameSync(tmp, MY_CHAR_DIR);
+    } catch (e) {
+      if (fs.existsSync(old)) fs.renameSync(old, MY_CHAR_DIR); // 되돌리기
+      throw e;
+    }
+  } catch (e) {
+    fs.rmSync(tmp, { recursive: true, force: true });
+    dialog.showErrorBox('캐릭터를 바꾸지 못했어요', `그림을 처리하다 문제가 생겼어요. 지금 캐릭터는 그대로예요.\n${e.message}`);
+    return;
+  }
+  try { fs.rmSync(old, { recursive: true, force: true }); } catch { /* 새 캐릭터는 이미 들어갔다. 남은 .old 는 다음에 지운다 */ }
+  useCharacter(MY_CHAR_DIR);
+  const n = Object.keys(plan).length;
+  bubble(`새 모습이에요! 표정 ${n}개를 넣었어요.${cut ? ` 배경 ${cut}장을 지웠어요.` : ''}${n < 5 ? ' 없는 표정은 평소 그림으로 보여요.' : ''}${why ? '\n건너뛴 그림:\n' + why : ''}`);
+}
+
+function characterMenu() {
+  const dir = config.characterDir;
+  const custom = dir && dir !== MY_CHAR_DIR; // 설정 파일에 직접 적은 폴더
+  return [
+    { label: '엔젤이 (기본)', type: 'radio', checked: !dir, click: () => useCharacter(null) },
+    { label: '내 캐릭터', type: 'radio', checked: dir === MY_CHAR_DIR, enabled: hasIdle(MY_CHAR_DIR), click: () => useCharacter(MY_CHAR_DIR) },
+    ...(custom ? [{ label: `설정 파일의 폴더 (${path.basename(dir)})`, type: 'radio', checked: true }] : []),
+    { type: 'separator' },
+    { label: '그림 골라서 바꾸기…', click: pickCharacter },
+    { label: '내 캐릭터 폴더 열기', enabled: fs.existsSync(MY_CHAR_DIR), click: () => shell.openPath(MY_CHAR_DIR) },
+  ];
 }
 
 // ---------- AI 호출 한도 ----------
@@ -267,7 +347,8 @@ handle('review:get', id => {
   if (!meta) return null; // 기록에 있는 리뷰만 연다
   const f = path.join(REVIEW_DIR, path.basename(id) + '.md');
   if (!fs.existsSync(f)) return null;
-  return { meta, html: renderMarkdown(fs.readFileSync(f, 'utf8')) };
+  const md = fs.readFileSync(f, 'utf8');
+  return { meta, html: renderMarkdown(md), card: bubbleCard({ repo: repoName(meta.repo), number: meta.number, title: meta.title }, summarize(md)) };
 });
 
 on('review:open-pr', id => {
@@ -340,6 +421,7 @@ function buildTray() {
     { label: '최근 리뷰', submenu: (state.reviews || []).length ? state.reviews.slice(0, 10).map(r => ({
       label: `${repoName(r.repo)} #${r.number} · ${r.line}`, click: () => send('open-review', r.id),
     })) : [{ label: '없음', enabled: false }] },
+    { label: '캐릭터', submenu: characterMenu() },
     { label: '방해 금지', type: 'checkbox', checked: Boolean(state.dnd), click: m => setDnd(m.checked) },
     { label: '캐릭터 숨기기', type: 'checkbox', checked: !win.isVisible(), click: m => (m.checked ? win.hide() : win.showInactive()) },
     { label: '캐릭터 위치 처음으로', click: resetPosition },
