@@ -10,6 +10,7 @@ const { diffPRs, baselineNote, prLabel, readyCount, seenAfterPick } = require('.
 const { summarize, bubbleCard } = require('./lib/summary');
 const { IMAGE_TYPES, planImport } = require('./lib/character');
 const { removeBackground, cutoutMethod } = require('./lib/cutout');
+const { greeting } = require('./lib/greeting');
 const { Usage } = require('./lib/usage');
 const { runClaude, findSasuScript } = require('./lib/claude');
 const { renderMarkdown } = require('./lib/markdown');
@@ -330,7 +331,20 @@ on('ui:drag-end', () => {
 });
 on('ui:focus', () => win.focus());
 
+// 인사말에 쓸 GitHub 계정명. 한 번 알아내면 state 에 둔다 (gh 만 씀, AI 아님)
+function loadGhLogin() {
+  execFile(config.ghPath || 'gh', ['api', 'user', '--jq', '.login'], { env, timeout: 15000 }, (err, stdout) => {
+    const login = !err && stdout.trim();
+    if (login && /^[A-Za-z0-9-]{1,39}$/.test(login) && login !== state.ghLogin) {
+      state.ghLogin = login;
+      saveState();
+      send('reload');
+    }
+  });
+}
+
 handle('app:info', () => ({
+  greeting: greeting({ me: config.displayName || state.ghLogin, hasRepos: config.repos.length > 0 }),
   repos: config.repos.map(r => ({ path: r, name: repoName(r) })),
   left: usage.left(today()),
   dnd: Boolean(state.dnd),
@@ -484,6 +498,7 @@ app.whenReady().then(() => {
 
   pollTimer = setInterval(poll, config.pollSeconds * 1000);
   setTimeout(poll, 3000);
+  loadGhLogin();
 
   // 미리보기: SASU_DEMO=1 npm start → 표정 다섯 가지와 말풍선을 차례로 보여 준다 (AI 안 씀)
   if (process.env.SASU_DEMO) {
