@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const { execFile, execFileSync } = require('node:child_process');
 
 const { withDefaults, loadJson, saveJson } = require('./lib/config');
-const { diffPRs } = require('./lib/prwatch');
+const { diffPRs, baselineNote, prLabel } = require('./lib/prwatch');
 const { summarize } = require('./lib/summary');
 const { Usage } = require('./lib/usage');
 const { runClaude, findSasuScript } = require('./lib/claude');
@@ -34,6 +34,7 @@ let win;
 let tray;
 let pollTimer;
 const queue = [];
+const openPRs = {}; // 저장소별 마지막으로 본 내 열린 PR (메뉴에서 고르기용)
 let working = false;
 
 const today = () => new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD (로컬)
@@ -118,19 +119,42 @@ function ghPRs(repo) {
   });
 }
 
-async function poll({ forceAll = false } = {}) {
-  for (const repo of config.repos) {
+// only: 이 저장소만 확인. force: 이미 본 PR 도 다시 리뷰
+async function poll({ only = null, force = false } = {}) {
+  const notes = [];
+  for (const repo of only ? [only] : config.repos) {
     const r = await ghPRs(repo);
     state.errors = state.errors || {};
-    if (r.error) { state.errors[repo] = r.error; continue; }
+    const first = !state.seen?.[repo]; // 처음 보는 저장소
+    if (r.error) {
+      state.errors[repo] = r.error;
+      if (only) notes.push(`${repoName(repo)} PR 목록을 못 읽었어요: ${r.error.slice(0, 100)}`);
+      continue;
+    }
     delete state.errors[repo];
-    const before = forceAll ? {} : (state.seen?.[repo] ?? null);
-    const { toReview, seen } = diffPRs(before, r.prs, { reviewDrafts: config.reviewDrafts });
+    openPRs[repo] = r.prs;
+    const { toReview, seen } = diffPRs(force ? {} : (state.seen?.[repo] ?? null), r.prs, { reviewDrafts: config.reviewDrafts });
     state.seen = { ...state.seen, [repo]: seen };
+    if (first && !force) notes.push(baselineNote(repoName(repo), seen)); // 처음엔 기준만 잡고 무엇을 건너뛰었는지 알린다
     for (const item of toReview) enqueue(repo, item.pr, item.reason);
   }
   saveState();
   buildTray();
+  if (notes.length && !queue.length) bubble(notes.join('\n'));
+  work();
+}
+
+// 메뉴에서 고른 PR 하나만 리뷰 (최신 커밋 기준)
+async function reviewOne(repo, number) {
+  const r = await ghPRs(repo);
+  const pr = r.prs?.find(p => p.number === number);
+  if (!pr) {
+    bubble(r.error ? `${repoName(repo)} PR 목록을 못 읽었어요: ${r.error.slice(0, 100)}` : `${repoName(repo)} PR #${number}을 찾지 못했어요. 닫혔을 수 있어요.`);
+    return;
+  }
+  state.seen = { ...state.seen, [repo]: { ...state.seen?.[repo], [number]: pr.headRefOid } };
+  saveState();
+  enqueue(repo, pr, 'manual');
   work();
 }
 
@@ -152,9 +176,10 @@ async function work() {
 }
 
 // ---------- AI ① PR 리뷰 ----------
+const REASON = { new: ' 새 PR', updated: ' 새 푸시', manual: '' };
 async function runReview({ repo, pr, reason }) {
   mood('thinking');
-  bubble(`${repoName(repo)} PR #${pr.number} ${reason === 'new' ? '새 PR' : '새 푸시'} 보는 중…`);
+  bubble(`${repoName(repo)} PR #${pr.number}${REASON[reason] || ''} 보는 중…`);
   const r = await runClaude({ prompt: `/sasu:review ${pr.number}`, model: config.reviewModel, cwd: repo, claudePath: config.claudePath || 'claude', env, sasuScript });
   const id = `${repoName(repo)}-${pr.number}-${pr.headRefOid.slice(0, 7)}`;
   fs.mkdirSync(REVIEW_DIR, { recursive: true });
@@ -260,12 +285,13 @@ async function addRepo() {
   if (!config.repos.includes(repo)) config.repos.push(repo);
   saveJson(CONFIG_FILE, config);
   send('reload'); // 대화창 저장소 목록 새로 고침
-  await poll(); // 처음엔 기준만 잡는다 (지금 열린 PR 은 리뷰하지 않음)
+  await poll({ only: repo }); // 처음엔 기준만 잡고, 건너뛴 PR 을 말풍선으로 알린다
 }
 
 function removeRepo(repo) {
   config.repos = config.repos.filter(r => r !== repo);
   if (state.seen) delete state.seen[repo];
+  delete openPRs[repo];
   saveJson(CONFIG_FILE, config);
   saveState();
   send('reload');
@@ -281,6 +307,17 @@ function setDnd(on) {
   buildTray();
 }
 
+function prItems(repo) {
+  const prs = openPRs[repo];
+  if (!prs) return [{ label: 'PR 목록 확인 전', enabled: false }];
+  if (!prs.length) return [{ label: '열린 내 PR 없음', enabled: false }];
+  const ready = prs.filter(pr => config.reviewDrafts || !pr.isDraft).length; // '모두'는 드래프트를 뺀다
+  return [
+    { label: '리뷰할 PR 고르기', submenu: prs.map(pr => ({ label: prLabel(pr), click: () => reviewOne(repo, pr.number) })) },
+    { label: `열린 내 PR 모두 리뷰 (${ready}개)`, enabled: ready > 0, click: () => poll({ only: repo, force: true }) },
+  ];
+}
+
 function buildTray() {
   if (!tray) return;
   const errors = state.errors || {};
@@ -291,7 +328,7 @@ function buildTray() {
       label: `${repoName(r)}${errors[r] ? ' ⚠' : ''}`,
       submenu: [
         ...(errors[r] ? [{ label: errors[r].slice(0, 60), enabled: false }] : []),
-        { label: '지금 열린 내 PR 모두 리뷰', click: () => poll({ forceAll: true }) },
+        ...prItems(r),
         { label: '빼기', click: () => removeRepo(r) },
       ],
     })) : [{ label: '없음', enabled: false }] },

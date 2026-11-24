@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
 
 const { summarize } = require('../lib/summary');
-const { diffPRs } = require('../lib/prwatch');
+const { diffPRs, baselineNote, prLabel } = require('../lib/prwatch');
 const { Usage } = require('../lib/usage');
 const { buildArgs, runClaude, READ_ONLY_TOOLS, findSasuScript } = require('../lib/claude');
 const { renderMarkdown } = require('../lib/markdown');
@@ -202,4 +202,27 @@ test('설정: 빠진 값은 기본값, 잘못된 값은 바로잡음', () => {
   assert.equal(c.pollSeconds, 60);
   assert.equal(c.reviewModel, 'sonnet');
   assert.equal(c.reviewDrafts, false);
+});
+
+// ---------- 저장소 추가 알림 · PR 고르기 ----------
+test('처음 볼 때 열린 PR 이 없으면 새 PR 부터 본다고 알린다', () => {
+  assert.equal(baselineNote('kpop-news', {}), 'kpop-news 지켜볼게요. 새 PR을 올리면 리뷰할게요.');
+});
+
+test('처음 볼 때 건너뛴 PR 을 최근 번호부터 알리고 고르는 곳을 알려 준다', () => {
+  const t = baselineNote('kpop-news', { 487: 'a', 651: 'b' });
+  assert.match(t, /이미 열려 있던 PR 2개\(#651, #487\)는 건너뛰었어요/);
+  assert.match(t, /지켜보는 저장소/);
+});
+
+test('건너뛴 PR 이 많으면 세 개만 적고 나머지는 개수로', () => {
+  const t = baselineNote('r', { 1: 'a', 2: 'b', 3: 'c', 4: 'd', 5: 'e' });
+  assert.match(t, /PR 5개\(#5, #4, #3 외 2개\)/);
+});
+
+test('메뉴의 PR 이름은 번호와 제목, 길면 자르고 드래프트는 표시', () => {
+  assert.equal(prLabel({ number: 651, title: 'fix: 짧은 제목', isDraft: false }), '#651 fix: 짧은 제목');
+  const long = prLabel({ number: 1, title: 'x'.repeat(80), isDraft: false });
+  assert.ok(long.length <= 50 && long.endsWith('…'));
+  assert.equal(prLabel({ number: 2, title: 't', isDraft: true }), '#2 t (드래프트)');
 });
