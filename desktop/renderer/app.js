@@ -56,8 +56,35 @@ buddy.addEventListener('pointerup', () => {
 });
 
 // ---------- 말풍선 ----------
-function showBubble({ text, reviewId }) {
-  bubbleEl.textContent = text;
+// 리뷰 결과는 카드로: 어디 · 제목 · 판정 칩과 개수 · 먼저 볼 것. 모두 textContent 로 넣는다.
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  e.className = cls;
+  if (text) e.textContent = text;
+  return e;
+}
+function reviewCard(c) {
+  const head = el('div', 'b-head');
+  head.append(el('span', 'b-where', c.where), el('span', `chip tone-${c.tone}`, c.verdict));
+  const stats = el('div', 'b-stats');
+  for (const st of c.stats) {
+    const box = el('div', `stat ${st.kind}${st.n ? '' : ' zero'}`);
+    box.append(el('b', '', String(st.n)), el('span', '', st.label));
+    stats.append(box);
+  }
+  const parts = [head, el('div', 'b-title', c.title), stats];
+  if (c.top) {
+    const top = el('div', 'b-top');
+    top.append(el('span', 'b-label', c.topLabel), el('span', 'b-top-text', c.top));
+    parts.push(top);
+  }
+  parts.push(el('div', 'b-more', '눌러서 전체 리뷰 보기'));
+  return parts;
+}
+function showBubble({ text, reviewId, card }) {
+  if (card) bubbleEl.replaceChildren(...reviewCard(card));
+  else bubbleEl.textContent = text;
+  bubbleEl.classList.toggle('card', Boolean(card));
   bubbleEl.classList.toggle('has-review', Boolean(reviewId));
   bubbleEl.dataset.review = reviewId || '';
   bubbleEl.hidden = !panel.hidden; // 대화창이 열려 있으면 말풍선은 숨긴다

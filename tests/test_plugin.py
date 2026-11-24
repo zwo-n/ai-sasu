@@ -6,6 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 AGENT = ROOT / "agents" / "senior-dev.md"
+CHECKER = ROOT / "agents" / "review-checker.md"
 SKILLS = sorted((ROOT / "skills").glob("*/SKILL.md"))
 EXPECTED_SKILLS = {"onboard", "review", "debug", "ask", "design", "growth"}
 SCRIPT_CMDS = {"init", "ask-log", "open", "answer", "search", "lesson", "report"}
@@ -85,6 +86,37 @@ class TestDocsMatchScript(unittest.TestCase):
             for t in re.findall(r'--topic\s+"([^"]+)"', p.read_text(encoding="utf-8")):
                 with self.subTest(file=p.name, topic=t):
                     self.assertIn(t, topics)
+
+
+class TestReviewChecker(unittest.TestCase):
+    """[반드시] 지적은 기록·판정 전에 다른 눈(review-checker)이 다시 확인한다."""
+
+    def test_checker_agent_is_read_only(self):
+        fm, body = frontmatter(CHECKER)
+        self.assertEqual(fm.get("name"), "review-checker")
+        tools = {t.strip() for t in fm.get("tools", "").split(",")}
+        self.assertTrue(tools, "tools 를 적어 범위를 좁힌다")
+        self.assertFalse(tools & {"Edit", "Write", "NotebookEdit", "WebFetch", "WebSearch"})
+        for verdict in ("확인됨", "틀림", "불확실"):
+            self.assertIn(verdict, body)
+
+    def test_review_calls_checker_before_recording(self):
+        text = (ROOT / "skills" / "review" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("sasu:review-checker", text)
+        self.assertLess(text.index("sasu:review-checker"), text.index("## 4. 기록"),
+                        "틀린 지적이 성장 기록에 남지 않게 기록보다 먼저 확인한다")
+
+
+class TestReviewFormat(unittest.TestCase):
+    def test_review_sections_match_desktop_summary(self):
+        # desktop/lib/summary.js 가 이 칸 이름과 "### 번호. [등급]"을 읽어 말풍선을 만든다
+        text = (ROOT / "skills" / "review" / "SKILL.md").read_text(encoding="utf-8")
+        for h in ("## 잘한 점", "## 아쉬운 점", "## 꼭 고칠 점", "## 판정"):
+            self.assertIn(h, text)
+        self.assertLess(text.index("## 아쉬운 점"), text.index("## 꼭 고칠 점"))
+        self.assertNotIn("## 문제점", text)
+        summary = (ROOT / "desktop" / "lib" / "summary.js").read_text(encoding="utf-8")
+        self.assertIn("'잘한 점'", summary)
 
 
 if __name__ == "__main__":
