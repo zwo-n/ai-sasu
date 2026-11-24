@@ -259,6 +259,7 @@ async function addRepo() {
   }
   if (!config.repos.includes(repo)) config.repos.push(repo);
   saveJson(CONFIG_FILE, config);
+  send('reload'); // 대화창 저장소 목록 새로 고침
   await poll(); // 처음엔 기준만 잡는다 (지금 열린 PR 은 리뷰하지 않음)
 }
 
@@ -267,6 +268,7 @@ function removeRepo(repo) {
   if (state.seen) delete state.seen[repo];
   saveJson(CONFIG_FILE, config);
   saveState();
+  send('reload');
   buildTray();
 }
 
