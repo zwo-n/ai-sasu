@@ -155,6 +155,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel()
 // ---------- 시작 ----------
 async function load() {
   info = await window.sasu.info();
+  const picked = repoSel.value; // 다시 채워도 사용자가 고른 저장소는 유지
   repoSel.innerHTML = '';
   for (const r of info.repos) {
     const o = document.createElement('option');
@@ -162,14 +163,18 @@ async function load() {
     o.textContent = r.name;
     repoSel.append(o);
   }
+  if (info.repos.some(r => r.path === picked)) repoSel.value = picked;
   repoSel.hidden = info.repos.length === 0;
   $('left').textContent = `오늘 남은 AI 호출 ${info.left}`;
   const custom = $('custom');
   custom.hidden = !info.character;
   $('sasu').style.display = info.character ? 'none' : '';
   setMood(info.dnd ? 'sleep' : 'idle');
-  if (!log.innerHTML) {
-    add('sasu', info.repos.length
+  // 첫 인사는 대화가 아직 없을 때만, 지금 저장소 상태에 맞게 다시 쓴다
+  const onlyGreeting = log.dataset.mode !== 'review' && [...log.children].every(c => c.classList.contains('greet'));
+  if (onlyGreeting) {
+    log.innerHTML = '';
+    add('sasu greet', info.repos.length
       ? '<p>안녕하세요, 사수예요. 코드 얘기면 뭐든 물어보세요. 내 PR이 올라오면 제가 먼저 볼게요.</p>'
       : '<p>안녕하세요, 사수예요. 메뉴 막대의 <strong>사수 → 저장소 추가…</strong>로 지켜볼 저장소를 알려 주세요.</p>');
   }
