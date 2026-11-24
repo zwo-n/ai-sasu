@@ -31,4 +31,16 @@ function prLabel(pr, max = 50) {
   return (text.length > room ? text.slice(0, room - 1) + '…' : text) + draft;
 }
 
-module.exports = { diffPRs, baselineNote, prLabel };
+// '모두 리뷰'가 실제로 리뷰할 개수
+function readyCount(prs, { reviewDrafts = false } = {}) {
+  return prs.filter(pr => reviewDrafts || !pr.isDraft).length;
+}
+
+// 메뉴에서 PR 하나를 골라 리뷰할 때의 새 seen.
+// 기준이 없던 저장소면 열린 PR 전체로 기준을 잡아, 나머지가 다음 확인에서 '새 PR'로 리뷰되지 않게 한다.
+function seenAfterPick(prev, prs, picked, opts = {}) {
+  const base = prev ?? diffPRs(null, prs, opts).seen;
+  return { ...base, [picked.number]: picked.headRefOid };
+}
+
+module.exports = { diffPRs, baselineNote, prLabel, readyCount, seenAfterPick };

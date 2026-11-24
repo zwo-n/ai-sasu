@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const { execFile, execFileSync } = require('node:child_process');
 
 const { withDefaults, loadJson, saveJson } = require('./lib/config');
-const { diffPRs, baselineNote, prLabel } = require('./lib/prwatch');
+const { diffPRs, baselineNote, prLabel, readyCount, seenAfterPick } = require('./lib/prwatch');
 const { summarize } = require('./lib/summary');
 const { Usage } = require('./lib/usage');
 const { runClaude, findSasuScript } = require('./lib/claude');
@@ -140,7 +140,8 @@ async function poll({ only = null, force = false } = {}) {
   }
   saveState();
   buildTray();
-  if (notes.length && !queue.length) bubble(notes.join('\n'));
+  // 직접 누른 확인(only)의 결과는 늘 보여 준다. 자동 확인은 곧 뜰 리뷰 말풍선을 덮지 않게 큐가 빌 때만
+  if (notes.length && (only || !queue.length)) bubble(notes.join('\n'));
   work();
 }
 
@@ -152,7 +153,7 @@ async function reviewOne(repo, number) {
     bubble(r.error ? `${repoName(repo)} PR 목록을 못 읽었어요: ${r.error.slice(0, 100)}` : `${repoName(repo)} PR #${number}을 찾지 못했어요. 닫혔을 수 있어요.`);
     return;
   }
-  state.seen = { ...state.seen, [repo]: { ...state.seen?.[repo], [number]: pr.headRefOid } };
+  state.seen = { ...state.seen, [repo]: seenAfterPick(state.seen?.[repo], r.prs, pr, { reviewDrafts: config.reviewDrafts }) };
   saveState();
   enqueue(repo, pr, 'manual');
   work();
@@ -311,7 +312,7 @@ function prItems(repo) {
   const prs = openPRs[repo];
   if (!prs) return [{ label: 'PR 목록 확인 전', enabled: false }];
   if (!prs.length) return [{ label: '열린 내 PR 없음', enabled: false }];
-  const ready = prs.filter(pr => config.reviewDrafts || !pr.isDraft).length; // '모두'는 드래프트를 뺀다
+  const ready = readyCount(prs, { reviewDrafts: config.reviewDrafts });
   return [
     { label: '리뷰할 PR 고르기', submenu: prs.map(pr => ({ label: prLabel(pr), click: () => reviewOne(repo, pr.number) })) },
     { label: `열린 내 PR 모두 리뷰 (${ready}개)`, enabled: ready > 0, click: () => poll({ only: repo, force: true }) },

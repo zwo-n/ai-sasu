@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
 
 const { summarize } = require('../lib/summary');
-const { diffPRs, baselineNote, prLabel } = require('../lib/prwatch');
+const { diffPRs, baselineNote, prLabel, readyCount, seenAfterPick } = require('../lib/prwatch');
 const { Usage } = require('../lib/usage');
 const { buildArgs, runClaude, READ_ONLY_TOOLS, findSasuScript } = require('../lib/claude');
 const { renderMarkdown } = require('../lib/markdown');
@@ -225,4 +225,22 @@ test('메뉴의 PR 이름은 번호와 제목, 길면 자르고 드래프트는 
   const long = prLabel({ number: 1, title: 'x'.repeat(80), isDraft: false });
   assert.ok(long.length <= 50 && long.endsWith('…'));
   assert.equal(prLabel({ number: 2, title: 't', isDraft: true }), '#2 t (드래프트)');
+});
+
+test('모두 리뷰할 개수는 드래프트를 뺀다 (드래프트 리뷰를 켜면 센다)', () => {
+  const prs = [pr(1, 'a'), pr(2, 'b', { isDraft: true })];
+  assert.equal(readyCount(prs), 1);
+  assert.equal(readyCount(prs, { reviewDrafts: true }), 2);
+});
+
+test('PR 하나를 골라 리뷰하면 그 PR 은 최신 커밋으로 본 것이 되고 나머지 기록은 그대로', () => {
+  const next = seenAfterPick({ 1: 'a', 2: 'old' }, [pr(1, 'a'), pr(2, 'new')], pr(2, 'new'));
+  assert.deepEqual(next, { 1: 'a', 2: 'new' });
+});
+
+test('기준이 없는 저장소에서 골라도 열린 PR 전체로 기준을 잡는다 (나머지를 새 PR 로 리뷰하지 않게)', () => {
+  const prs = [pr(1, 'a'), pr(2, 'b'), pr(3, 'c', { isDraft: true })];
+  const next = seenAfterPick(undefined, prs, prs[1]);
+  assert.deepEqual(next, { 1: 'a', 2: 'b' });
+  assert.deepEqual(diffPRs(next, prs).toReview, []);
 });
