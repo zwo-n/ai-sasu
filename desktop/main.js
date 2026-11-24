@@ -9,7 +9,7 @@ const { withDefaults, loadJson, saveJson } = require('./lib/config');
 const { diffPRs, baselineNote, prLabel, readyCount, seenAfterPick } = require('./lib/prwatch');
 const { summarize, bubbleCard } = require('./lib/summary');
 const { IMAGE_TYPES, planImport } = require('./lib/character');
-const { removeBackground } = require('./lib/cutout');
+const { removeBackground, cutoutMethod } = require('./lib/cutout');
 const { Usage } = require('./lib/usage');
 const { runClaude, findSasuScript } = require('./lib/claude');
 const { renderMarkdown } = require('./lib/markdown');
@@ -113,19 +113,41 @@ function useCharacter(dir) {
   buildTray();
 }
 
-// 그림 한 장을 내 캐릭터 폴더에 넣는다. png·jpg·webp 는 배경(누끼)을 지우고 여백을 잘라 png 로, gif·svg 는 그대로.
-// 화면에는 240×264 로 보이니 너무 큰 그림은 줄인다. 배경을 지웠으면 true.
-function cutout(src, destNoExt) {
+// 사진 속 주인공만 따기: macOS Vision(사진 앱 '피사체 복사'와 같은 기능)을 osascript 로 부른다. AI·네트워크를 쓰지 않는다.
+function liftSubject(src, dst) {
+  return new Promise(resolve => {
+    execFile('osascript', ['-l', 'JavaScript', path.join(__dirname, 'native', 'lift-subject.js'), src, dst],
+      { timeout: 30000 }, (err, stdout) => resolve(!err && stdout.trim() === 'ok' && fs.existsSync(dst)));
+  });
+}
+
+// 그림 한 장을 내 캐릭터 폴더에 넣는다. 화면에는 240×264 로 보이니 높이 528px 로 줄여 png 로 저장한다.
+// 누끼: 단색 배경 그림은 색으로 지우고, 사진은 맥 Vision 으로 주인공만 딴다. 못 따면 원본을 그대로 쓴다.
+// gif·svg 는 그대로 복사한다. 배경을 지웠으면 true.
+async function cutout(src, destNoExt) {
   const ext = path.extname(src).toLowerCase();
-  const img = ['.png', '.jpg', '.jpeg', '.webp'].includes(ext) ? nativeImage.createFromPath(src) : null;
+  let img = ['.png', '.jpg', '.jpeg', '.webp'].includes(ext) ? nativeImage.createFromPath(src) : null;
   if (!img || img.isEmpty()) { fs.copyFileSync(src, destNoExt + ext); return false; }
-  // 먼저 화면에 쓸 크기로 줄인다. 큰 사진을 그대로 계산하면 메인 스레드(메뉴·말풍선)가 오래 멈춘다
-  const small = img.getSize().height > 528 ? img.resize({ height: 528, quality: 'best' }) : img;
-  const { width, height } = small.getSize();
-  const r = removeBackground({ width, height, data: small.toBitmap() });
-  const out = r.changed ? nativeImage.createFromBitmap(r.data, { width: r.width, height: r.height }) : small;
+  const fit = im => (im.getSize().height > 528 ? im.resize({ height: 528, quality: 'best' }) : im);
+  img = fit(img); // 큰 사진을 원래 크기로 계산하면 메인 스레드(메뉴·말풍선)가 멈춘다
+  const { width, height } = img.getSize();
+  const bitmap = { width, height, data: img.toBitmap() };
+  const method = cutoutMethod(bitmap);
+  let out = img;
+  let changed = false;
+  if (method === 'flat') {
+    const r = removeBackground(bitmap);
+    if (r.changed) { out = nativeImage.createFromBitmap(r.data, { width: r.width, height: r.height }); changed = true; }
+  } else if (method === 'photo') {
+    const lifted = destNoExt + '.lift.png';
+    if (await liftSubject(src, lifted)) {
+      const li = nativeImage.createFromPath(lifted);
+      if (!li.isEmpty()) { out = fit(li); changed = true; }
+    }
+    fs.rmSync(lifted, { force: true });
+  }
   fs.writeFileSync(destNoExt + '.png', out.toPNG());
-  return r.changed;
+  return changed;
 }
 
 // 그림을 골라 표정별로 나눠 내 캐릭터 폴더에 복사한다. 원본을 옮기거나 지워도 그대로 보이게.
@@ -148,7 +170,7 @@ async function pickCharacter() {
   try {
     fs.rmSync(tmp, { recursive: true, force: true });
     fs.mkdirSync(tmp, { recursive: true });
-    for (const [mood, src] of Object.entries(plan)) cut += cutout(src, path.join(tmp, mood)) ? 1 : 0;
+    for (const [mood, src] of Object.entries(plan)) cut += (await cutout(src, path.join(tmp, mood))) ? 1 : 0;
     fs.rmSync(old, { recursive: true, force: true });
     if (fs.existsSync(MY_CHAR_DIR)) fs.renameSync(MY_CHAR_DIR, old);
     try {
