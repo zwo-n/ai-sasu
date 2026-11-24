@@ -315,9 +315,14 @@ test('표정을 모르는 첫 장은 평소, 그다음부터는 건너뛰고 이
 });
 
 test('그림이 아니거나 너무 크면 건너뛰고, 쓸 그림이 없으면 plan 은 null', () => {
-  const { plan, skipped } = planImport([f('/a/note.txt'), f('/a/big.png', 6 * 1024 * 1024)]);
+  const { plan, skipped } = planImport([f('/a/note.txt'), f('/a/big.gif', 6 * 1024 * 1024), f('/a/huge.png', 51 * 1024 * 1024)]);
   assert.equal(plan, null);
-  assert.deepEqual(skipped.map(s => s.reason), ['그림 파일이 아니에요', '5MB가 넘어요']);
+  assert.deepEqual(skipped.map(s => s.reason), ['그림 파일이 아니에요', 'gif·svg는 그대로 쓰니 5MB까지예요', '50MB가 넘어요']);
+});
+
+test('png·jpg·webp 는 화면 크기로 줄여 저장하니 큰 사진(50MB까지)도 받는다', () => {
+  const { plan } = planImport([f('/a/photo.jpg', 30 * 1024 * 1024)]);
+  assert.deepEqual(plan, { idle: '/a/photo.jpg' });
 });
 
 test('같은 표정이 두 장이면 앞의 것만 쓴다', () => {

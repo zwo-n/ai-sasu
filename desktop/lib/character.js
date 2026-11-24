@@ -6,7 +6,11 @@ const IMAGE_TYPES = {
   '.png': 'image/png', '.gif': 'image/gif', '.webp': 'image/webp',
   '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
 };
-const MAX_BYTES = 5 * 1024 * 1024; // 그림은 data URL 로 화면에 넘기니 너무 크면 안 된다
+// png·jpg·webp 는 화면 크기(높이 528px)로 줄여 저장하니 원본이 커도 된다.
+// gif·svg 는 그대로 data URL 로 화면에 넘기니 작아야 한다 (표정 바뀔 때마다 통째로 오간다).
+const SHRINKABLE = new Set(['.png', '.jpg', '.jpeg', '.webp']);
+const MAX_SHRINKABLE = 50 * 1024 * 1024;
+const MAX_AS_IS = 5 * 1024 * 1024;
 // 파일 이름에 이 낱말이 있으면 그 표정
 const KEYWORDS = {
   idle: ['idle', '기본', '평소'],
@@ -27,8 +31,10 @@ function planImport(files) {
   const skipped = [];
   let unnamed = null; // 표정을 모르는 첫 장
   for (const { path: file, size } of files) {
-    if (!IMAGE_TYPES[path.extname(file).toLowerCase()]) { skipped.push({ file, reason: '그림 파일이 아니에요' }); continue; }
-    if (size > MAX_BYTES) { skipped.push({ file, reason: '5MB가 넘어요' }); continue; }
+    const ext = path.extname(file).toLowerCase();
+    if (!IMAGE_TYPES[ext]) { skipped.push({ file, reason: '그림 파일이 아니에요' }); continue; }
+    if (SHRINKABLE.has(ext) && size > MAX_SHRINKABLE) { skipped.push({ file, reason: '50MB가 넘어요' }); continue; }
+    if (!SHRINKABLE.has(ext) && size > MAX_AS_IS) { skipped.push({ file, reason: 'gif·svg는 그대로 쓰니 5MB까지예요' }); continue; }
     const mood = moodOf(file);
     if (mood && plan[mood]) skipped.push({ file, reason: '같은 표정 그림이 이미 있어요' });
     else if (mood) plan[mood] = file;

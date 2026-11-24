@@ -32,6 +32,7 @@ python3 -m venv /tmp/pil && /tmp/pil/bin/pip install pillow==12.0.0
 - **여러 장**을 고르면 파일 이름으로 표정을 나눕니다: `idle`·`thinking`·`warn`·`happy`·`sleep` 또는 `기본`·`생각`·`놀람`·`신남`·`졸림` (예: `고양이_신남.png`).
 - png·jpg·webp는 **배경(누끼)을 자동으로 지우고** 빈 여백을 잘라 냅니다. 가장자리와 이어진 단색 배경만 지우니 캐릭터 안쪽의 흰 눈 같은 건 남습니다. 이미 배경이 투명하거나, 배경이 사진처럼 제각각이면 그대로 둡니다.
 - gif·svg는 그대로 씁니다 (움직이는 그림은 gif로).
+- 크기 제한: png·jpg·webp는 50MB까지 (화면 크기로 줄여 저장), gif·svg는 5MB까지.
 - 고른 그림은 앱 폴더(`~/Library/Application Support/sasu-buddy/character`)에 복사되니 원본을 옮겨도 됩니다. **캐릭터 → 엔젤이 (기본)**으로 언제든 되돌릴 수 있습니다.
 
 직접 다듬은 그림 폴더를 쓰려면 설정 파일의 `characterDir`에 그 폴더 경로를 적고 **설정 다시 읽기**.
