@@ -11,6 +11,8 @@ const { summarize, bubbleCard } = require('./lib/summary');
 const { IMAGE_TYPES, planImport } = require('./lib/character');
 const { removeBackground, cutoutMethod } = require('./lib/cutout');
 const { greeting } = require('./lib/greeting');
+const { LABEL, launchAgentPlist } = require('./lib/autostart');
+const { addNotice, unreadCount, groupByDay, closedPRs, closedText, seedFromReviews } = require('./lib/notices');
 const { Usage } = require('./lib/usage');
 const { runClaude, findSasuScript } = require('./lib/claude');
 const { renderMarkdown } = require('./lib/markdown');
@@ -29,7 +31,7 @@ const H = 560;
 const MOODS = ['idle', 'thinking', 'warn', 'happy', 'sleep'];
 
 let config;
-let state;   // { seen: {repo: {PR: sha}}, usage: {days}, sessions: {repo: id}, reviews: [...], dnd }
+let state;   // { seen: {repo: {PR: sha}}, usage: {days}, sessions: {repo: id}, reviews: [...], notices: [...], dnd }
 let usage;
 let env;
 let sasuScript; // 설치된 sasu.py — claude 에게 이 경로만 python3 로 허용
@@ -60,8 +62,30 @@ function mood(m) {
   send('mood', state.dnd ? 'sleep' : m);
 }
 
-function bubble(text, reviewId = null, card = null) {
-  if (!state.dnd) send('bubble', { text, reviewId, card });
+// 알림 기록에 남긴다. 방해 금지 중이거나 대화창을 보느라 놓친 것도 나중에 다시 본다.
+let noticeSeq = 0;
+function remember(item) {
+  const id = `n${Date.now()}-${noticeSeq++}`;
+  state.notices = addNotice(state.notices, { id, ...item });
+  saveState();
+  send('notices', unreadCount(state.notices));
+  buildTray();
+  return id;
+}
+
+function reviewCardFor(r) {
+  try {
+    const md = fs.readFileSync(path.join(REVIEW_DIR, path.basename(r.id) + '.md'), 'utf8');
+    return bubbleCard({ repo: repoName(r.repo), number: r.number, title: r.title }, summarize(md));
+  } catch {
+    return null; // 파일이 없으면 글자로만 보인다
+  }
+}
+
+// keep: false 는 '보는 중…'처럼 잠깐 보이고 마는 말풍선 (기록하지 않는다)
+function bubble(text, reviewId = null, card = null, { keep = true } = {}) {
+  const noticeId = keep ? remember({ text, reviewId, card }) : null;
+  if (!state.dnd) send('bubble', { text, reviewId, card, noticeId });
 }
 
 // ---------- 창 ----------
@@ -151,8 +175,17 @@ async function cutout(src, destNoExt) {
   return changed;
 }
 
-// 그림을 골라 표정별로 나눠 내 캐릭터 폴더에 복사한다. 원본을 옮기거나 지워도 그대로 보이게.
+// 누끼에 사진마다 최대 30초가 걸린다. 그동안 또 누르면 두 작업이 같은 .new 폴더를 쓰니 하나씩만 한다.
+let picking = false;
 async function pickCharacter() {
+  if (picking) return;
+  picking = true;
+  buildTray();
+  try { await replaceCharacter(); } finally { picking = false; buildTray(); }
+}
+
+// 그림을 골라 표정별로 나눠 내 캐릭터 폴더에 복사한다. 원본을 옮기거나 지워도 그대로 보이게.
+async function replaceCharacter() {
   const r = await dialog.showOpenDialog({
     title: '캐릭터 그림 고르기',
     message: '한 장이면 모든 표정에 씁니다. 여러 장이면 파일 이름(idle·thinking·warn·happy·sleep 또는 기본·생각·놀람·신남·졸림)으로 나눕니다.',
@@ -188,7 +221,7 @@ async function pickCharacter() {
   try { fs.rmSync(old, { recursive: true, force: true }); } catch { /* 새 캐릭터는 이미 들어갔다. 남은 .old 는 다음에 지운다 */ }
   useCharacter(MY_CHAR_DIR);
   const n = Object.keys(plan).length;
-  bubble(`새 모습이에요! 표정 ${n}개를 넣었어요.${cut ? ` 배경 ${cut}장을 지웠어요.` : ''}${n < 5 ? ' 없는 표정은 평소 그림으로 보여요.' : ''}${why ? '\n건너뛴 그림:\n' + why : ''}`);
+  bubble(`새 모습이에요! 표정 ${n}개를 넣었어요.${cut ? ` 배경 ${cut}장을 지웠어요.` : ''}${n < 5 ? ' 없는 표정은 평소 그림으로 보여요.' : ''}${why ? '\n건너뛴 그림:\n' + why : ''}`, null, null, { keep: false });
 }
 
 function characterMenu() {
@@ -199,7 +232,7 @@ function characterMenu() {
     { label: '내 캐릭터', type: 'radio', checked: dir === MY_CHAR_DIR, enabled: hasIdle(MY_CHAR_DIR), click: () => useCharacter(MY_CHAR_DIR) },
     ...(custom ? [{ label: `설정 파일의 폴더 (${path.basename(dir)})`, type: 'radio', checked: true }] : []),
     { type: 'separator' },
-    { label: '그림 골라서 바꾸기…', click: pickCharacter },
+    { label: picking ? '그림 처리 중…' : '그림 골라서 바꾸기…', enabled: !picking, click: pickCharacter },
     { label: '내 캐릭터 폴더 열기', enabled: fs.existsSync(MY_CHAR_DIR), click: () => shell.openPath(MY_CHAR_DIR) },
   ];
 }
@@ -235,6 +268,7 @@ async function poll({ only = null, force = false } = {}) {
       continue;
     }
     delete state.errors[repo];
+    for (const n of closedPRs(state.seen?.[repo], r.prs)) tellClosed(repo, n);
     openPRs[repo] = r.prs;
     const { toReview, seen } = diffPRs(force ? {} : (state.seen?.[repo] ?? null), r.prs, { reviewDrafts: config.reviewDrafts });
     state.seen = { ...state.seen, [repo]: seen };
@@ -246,6 +280,16 @@ async function poll({ only = null, force = false } = {}) {
   // 직접 누른 확인(only)의 결과는 늘 보여 준다. 자동 확인은 곧 뜰 리뷰 말풍선을 덮지 않게 큐가 빌 때만
   if (notes.length && (only || !queue.length)) bubble(notes.join('\n'));
   work();
+}
+
+// 지켜보던 PR 이 목록에서 사라지면 머지됐는지 닫혔는지 물어 알린다 (gh 만 씀)
+function tellClosed(repo, number) {
+  execFile(config.ghPath || 'gh', ['pr', 'view', String(number), '--json', 'state,title'], { cwd: repo, env, timeout: 30000 }, (err, stdout) => {
+    let pr;
+    try { pr = JSON.parse(stdout); } catch { return; }
+    const text = !err && closedText(repoName(repo), number, pr);
+    if (text) bubble(text);
+  });
 }
 
 // 메뉴에서 고른 PR 하나만 리뷰 (최신 커밋 기준)
@@ -284,7 +328,7 @@ async function work() {
 const REASON = { new: ' 새 PR', updated: ' 새 푸시', manual: '' };
 async function runReview({ repo, pr, reason }) {
   mood('thinking');
-  bubble(`${repoName(repo)} PR #${pr.number}${REASON[reason] || ''} 보는 중…`);
+  bubble(`${repoName(repo)} PR #${pr.number}${REASON[reason] || ''} 보는 중…`, null, null, { keep: false });
   const r = await runClaude({ prompt: `/sasu:review ${pr.number}`, model: config.reviewModel, cwd: repo, claudePath: config.claudePath || 'claude', env, sasuScript });
   const id = `${repoName(repo)}-${pr.number}-${pr.headRefOid.slice(0, 7)}`;
   fs.mkdirSync(REVIEW_DIR, { recursive: true });
@@ -350,7 +394,23 @@ handle('app:info', () => ({
   dnd: Boolean(state.dnd),
   character: characterImages(),
   reviews: state.reviews || [],
+  unread: unreadCount(state.notices),
 }));
+
+// 지나간 알림: 날짜별로. 리뷰 기록이 남아 있는 것만 눌러서 열 수 있다.
+handle('notices:get', () => {
+  const live = new Set((state.reviews || []).map(r => r.id));
+  return groupByDay((state.notices || []).map(n => ({ ...n, reviewId: live.has(n.reviewId) ? n.reviewId : null })));
+});
+
+// 읽음 표시: id 하나, 또는 없으면 모두
+on('notices:read', id => {
+  if (!state.notices?.length) return;
+  state.notices = state.notices.map(n => (!id || n.id === id ? { ...n, read: true } : n));
+  saveState();
+  send('notices', unreadCount(state.notices));
+  buildTray();
+});
 
 // ---------- AI ② 대화 ----------
 handle('chat:send', async msg => {
@@ -383,14 +443,31 @@ handle('review:get', id => {
   if (!meta) return null; // 기록에 있는 리뷰만 연다
   const f = path.join(REVIEW_DIR, path.basename(id) + '.md');
   if (!fs.existsSync(f)) return null;
-  const md = fs.readFileSync(f, 'utf8');
-  return { meta, html: renderMarkdown(md), card: bubbleCard({ repo: repoName(meta.repo), number: meta.number, title: meta.title }, summarize(md)) };
+  return { meta, html: renderMarkdown(fs.readFileSync(f, 'utf8')), card: reviewCardFor(meta) };
 });
 
 on('review:open-pr', id => {
   const meta = (state.reviews || []).find(r => r.id === id);
   if (meta && /^https:\/\/github\.com\//.test(meta.url)) shell.openExternal(meta.url);
 });
+
+// ---------- 맥 켤 때 사수도 켜기 ----------
+// 고른 캐릭터·설정은 앱을 껐다 켜도 남는다. 맥을 다시 켰을 때 앱이 안 떠 있으면 안 보일 뿐이라, 로그인할 때 켜 준다.
+const AGENT_FILE = path.join(app.getPath('home'), 'Library', 'LaunchAgents', `${LABEL}.plist`);
+const autoStartOn = () => fs.existsSync(AGENT_FILE);
+function setAutoStart(on) {
+  try {
+    if (on) {
+      fs.mkdirSync(path.dirname(AGENT_FILE), { recursive: true });
+      fs.writeFileSync(AGENT_FILE, launchAgentPlist(process.execPath, app.isPackaged ? [] : [app.getAppPath()]));
+    } else {
+      fs.rmSync(AGENT_FILE, { force: true });
+    }
+  } catch (e) {
+    dialog.showErrorBox('설정을 바꾸지 못했어요', e.message);
+  }
+  buildTray();
+}
 
 // ---------- 트레이 메뉴 ----------
 async function addRepo() {
@@ -454,6 +531,7 @@ function buildTray() {
     { label: '저장소 추가…', click: addRepo },
     { label: '지금 PR 확인', click: () => poll() },
     { type: 'separator' },
+    { label: `지나간 알림 보기${unreadCount(state.notices) ? ` (새 알림 ${unreadCount(state.notices)})` : ''}`, click: () => send('open-notices') },
     { label: '최근 리뷰', submenu: (state.reviews || []).length ? state.reviews.slice(0, 10).map(r => ({
       label: `${repoName(r.repo)} #${r.number} · ${r.line}`, click: () => send('open-review', r.id),
     })) : [{ label: '없음', enabled: false }] },
@@ -461,6 +539,7 @@ function buildTray() {
     { label: '방해 금지', type: 'checkbox', checked: Boolean(state.dnd), click: m => setDnd(m.checked) },
     { label: '캐릭터 숨기기', type: 'checkbox', checked: !win.isVisible(), click: m => (m.checked ? win.hide() : win.showInactive()) },
     { label: '캐릭터 위치 처음으로', click: resetPosition },
+    { label: '맥 켤 때 사수도 켜기', type: 'checkbox', checked: autoStartOn(), click: m => setAutoStart(m.checked) },
     { type: 'separator' },
     { label: '설정 파일 열기', click: () => shell.openPath(CONFIG_FILE) },
     { label: '설정 다시 읽기', click: reloadConfig },
@@ -484,6 +563,7 @@ app.whenReady().then(() => {
   saveJson(CONFIG_FILE, config); // 처음 켜면 기본 설정 파일을 만든다
   state = loadJson(STATE_FILE, {});
   state.usage = state.usage || {};
+  if (!state.notices) state.notices = seedFromReviews(state.reviews, reviewCardFor);
   usage = new Usage(state.usage, config.dailyLimit);
   env = loginEnv();
   sasuScript = config.sasuScript

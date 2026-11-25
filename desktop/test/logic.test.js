@@ -404,12 +404,83 @@ test('첫 인사: 이름이 있으면 "○○님의 PR"', () => {
   assert.match(greeting({ me: 'zwo-n', hasRepos: true }), /zwo-n님의 PR이/);
 });
 
-test('첫 인사: 이름을 모르면 "올리신 PR", 저장소가 없으면 추가 안내', () => {
-  assert.match(greeting({ me: null, hasRepos: true }), /올리신 PR이 올라오면|PR을 올리시면/);
+test('첫 인사: 이름을 모르면 "PR을 올리시면", 저장소가 없으면 추가 안내', () => {
+  assert.match(greeting({ me: null, hasRepos: true }), /PR을 올리시면/);
   assert.match(greeting({ me: '지원', hasRepos: false }), /저장소 추가…/);
 });
 
 test('첫 인사: 이름은 앞뒤 공백을 빼고 20자까지', () => {
   assert.match(greeting({ me: '  지원  ', hasRepos: true }), / 지원님의 PR/);
   assert.match(greeting({ me: 'x'.repeat(40), hasRepos: true }), new RegExp(`${'x'.repeat(20)}님의 PR`));
+});
+
+// ---------- 지나간 알림 ----------
+const { addNotice, unreadCount, groupByDay, closedPRs, closedText, seedFromReviews, MAX } = require('../lib/notices');
+const DAY = 24 * 60 * 60 * 1000;
+
+test('알림 기록: 새 것이 맨 앞, 안 읽음으로 들어간다', () => {
+  let list = addNotice([], { id: 'a', text: '하나' }, 1000);
+  list = addNotice(list, { id: 'b', text: '둘' }, 2000);
+  assert.deepEqual(list.map(n => n.id), ['b', 'a']);
+  assert.equal(unreadCount(list), 2);
+  assert.equal(unreadCount(undefined), 0);
+});
+
+test('알림 기록: 7일 지난 것과 개수 넘는 것은 버린다', () => {
+  const now = 100 * DAY;
+  const old = { id: 'old', at: now - 8 * DAY, read: true };
+  const list = addNotice([old], { id: 'new' }, now);
+  assert.deepEqual(list.map(n => n.id), ['new']);
+  let many = [];
+  for (let i = 0; i < MAX + 5; i++) many = addNotice(many, { id: String(i) }, now + i);
+  assert.equal(many.length, MAX);
+  assert.equal(many[0].id, String(MAX + 4));
+});
+
+test('알림 묶기: 오늘 / 어제 / 그 전은 날짜', () => {
+  const now = new Date(2026, 10, 25, 15, 0).getTime();
+  const at = (d, h) => new Date(2026, 10, d, h, 0).getTime();
+  const groups = groupByDay([{ id: 1, at: at(25, 9) }, { id: 2, at: at(25, 1) }, { id: 3, at: at(24, 23) }, { id: 4, at: at(22, 10) }], now);
+  assert.deepEqual(groups.map(g => [g.label, g.items.map(n => n.id)]), [['오늘', [1, 2]], ['어제', [3]], ['11월 22일', [4]]]);
+  assert.deepEqual(groupByDay([], now), []);
+});
+
+test('닫힌 PR: 지난번 목록에 있었는데 지금 열린 목록에 없는 것만', () => {
+  const prs = [{ number: 5, isDraft: false }, { number: 6, isDraft: true }];
+  assert.deepEqual(closedPRs({ 4: 'a', 5: 'b', 6: 'c' }, prs), [4]); // 드래프트로 바뀐 6 은 아직 열려 있다
+  assert.deepEqual(closedPRs(null, prs), []); // 처음 보는 저장소
+  assert.deepEqual(closedPRs({}, []), []);
+});
+
+test('닫힌 PR 알림 말: 머지 / 그냥 닫힘 / 아직 열림은 알리지 않음', () => {
+  assert.equal(closedText('ai-sasu', 7, { state: 'MERGED', title: '첫 인사' }), 'ai-sasu PR #7 머지됐어요.\n첫 인사');
+  assert.match(closedText('ai-sasu', 8, { state: 'CLOSED', title: 'x' }), /머지 없이 닫혔어요/);
+  assert.equal(closedText('ai-sasu', 9, { state: 'OPEN' }), null);
+  assert.equal(closedText('ai-sasu', 9, null), null);
+});
+
+test('처음 켤 때: 지난 7일 리뷰로 알림 목록을 읽음 상태로 채운다', () => {
+  const now = 100 * DAY;
+  const iso = t => new Date(t).toISOString();
+  const reviews = [
+    { id: 'r-old', number: 1, title: '옛것', line: '머지 가능', date: iso(now - 9 * DAY) },
+    { id: 'r-2', number: 2, title: '둘', line: '막힘', date: iso(now - DAY) },
+    { id: 'r-3', number: 3, title: '셋', line: '머지 가능', date: iso(now - 60000) },
+  ];
+  const list = seedFromReviews(reviews, r => (r.id === 'r-3' ? { where: 'x' } : null), now);
+  assert.deepEqual(list.map(n => n.reviewId), ['r-3', 'r-2']);
+  assert.equal(unreadCount(list), 0);
+  assert.deepEqual(list[0].card, { where: 'x' });
+  assert.equal(list[1].text, 'PR #2 둘\n막힘');
+});
+
+// ---------- 맥 켤 때 켜기 ----------
+const { launchAgentPlist, LABEL } = require('../lib/autostart');
+
+test('로그인 때 켜기: 실행 파일과 앱 폴더를 넣고, 경로의 특수문자는 이스케이프', () => {
+  const xml = launchAgentPlist('/Apps/Electron', ['/Users/me/a&b <x>/desktop']);
+  assert.match(xml, new RegExp(`<string>${LABEL}</string>`));
+  assert.match(xml, /<string>\/Apps\/Electron<\/string>\n {4}<string>\/Users\/me\/a&amp;b &lt;x&gt;\/desktop<\/string>/);
+  assert.match(xml, /<key>RunAtLoad<\/key>\n {2}<true\/>/);
+  assert.equal((launchAgentPlist('/Apps/사수').match(/<string>/g) || []).length, 2); // 패키지 앱: 라벨 + 실행 파일
 });
