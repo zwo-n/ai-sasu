@@ -36,10 +36,12 @@ function closedPRs(prevSeen, openPrs) {
 }
 
 // gh pr view 결과로 알릴 말. 아직 열려 있으면(다시 열림 등) 알리지 않는다.
-function closedText(name, number, pr) {
+// 머지는 사수가 응원 한마디를 붙인다. who: 부를 이름 (없으면 이름 없이)
+function closedText(name, number, pr, who = '') {
   const title = String(pr?.title || '').slice(0, 50);
-  if (pr?.state === 'MERGED') return `${name} PR #${number} 머지됐어요.${title ? `\n${title}` : ''}`;
-  if (pr?.state === 'CLOSED') return `${name} PR #${number}은 머지 없이 닫혔어요.${title ? `\n${title}` : ''}`;
+  const cheer = who ? ` 수고하셨습니다, ${who}님!` : ' 수고하셨습니다!';
+  if (pr?.state === 'MERGED') return `${name} PR #${number} 머지됐습니다.${cheer}${title ? `\n${title}` : ''}`;
+  if (pr?.state === 'CLOSED') return `${name} PR #${number}은 머지 없이 닫혔습니다.${title ? `\n${title}` : ''}`;
   return null;
 }
 

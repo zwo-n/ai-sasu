@@ -225,12 +225,12 @@ test('설정: 빠진 값은 기본값, 잘못된 값은 바로잡음', () => {
 
 // ---------- 저장소 추가 알림 · PR 고르기 ----------
 test('처음 볼 때 열린 PR 이 없으면 새 PR 부터 본다고 알린다', () => {
-  assert.equal(baselineNote('kpop-news', {}), 'kpop-news 지켜볼게요. 새 PR을 올리면 리뷰할게요.');
+  assert.equal(baselineNote('kpop-news', {}), 'kpop-news 지켜보겠습니다. 새 PR을 올리면 리뷰하겠습니다.');
 });
 
 test('처음 볼 때 건너뛴 PR 을 최근 번호부터 알리고 고르는 곳을 알려 준다', () => {
   const t = baselineNote('kpop-news', { 487: 'a', 651: 'b' });
-  assert.match(t, /이미 열려 있던 PR 2개\(#651, #487\)는 건너뛰었어요/);
+  assert.match(t, /이미 열려 있던 PR 2개\(#651, #487\)는 건너뛰었습니다/);
   assert.match(t, /지켜보는 저장소/);
 });
 
@@ -317,7 +317,7 @@ test('표정을 모르는 첫 장은 평소, 그다음부터는 건너뛰고 이
 test('그림이 아니거나 너무 크면 건너뛰고, 쓸 그림이 없으면 plan 은 null', () => {
   const { plan, skipped } = planImport([f('/a/note.txt'), f('/a/big.gif', 6 * 1024 * 1024), f('/a/huge.png', 51 * 1024 * 1024)]);
   assert.equal(plan, null);
-  assert.deepEqual(skipped.map(s => s.reason), ['그림 파일이 아니에요', 'gif·svg는 그대로 쓰니 5MB까지예요', '50MB가 넘어요']);
+  assert.deepEqual(skipped.map(s => s.reason), ['그림 파일이 아닙니다', 'gif·svg는 그대로 쓰니 5MB까지입니다', '50MB가 넘습니다']);
 });
 
 test('png·jpg·webp 는 화면 크기로 줄여 저장하니 큰 사진(50MB까지)도 받는다', () => {
@@ -400,7 +400,7 @@ test('배경 지우기: 가장자리가 대부분만 비슷한 사진은 색으�
 const { greeting } = require('../lib/greeting');
 
 test('첫 인사: 이름이 있으면 "○○님의 PR"', () => {
-  assert.equal(greeting({ me: '지원', hasRepos: true }), '안녕하세요, 사수예요. 코드 얘기면 뭐든 물어보세요. 지원님의 PR이 올라오면 제가 먼저 볼게요.');
+  assert.equal(greeting({ me: '지원', hasRepos: true }), '안녕하십니까, 사수입니다. 코드 얘기면 뭐든 물어보십시오. 지원님의 PR이 올라오면 제가 먼저 보겠습니다.');
   assert.match(greeting({ me: 'zwo-n', hasRepos: true }), /zwo-n님의 PR이/);
 });
 
@@ -453,8 +453,9 @@ test('닫힌 PR: 지난번 목록에 있었는데 지금 열린 목록에 없는
 });
 
 test('닫힌 PR 알림 말: 머지 / 그냥 닫힘 / 아직 열림은 알리지 않음', () => {
-  assert.equal(closedText('ai-sasu', 7, { state: 'MERGED', title: '첫 인사' }), 'ai-sasu PR #7 머지됐어요.\n첫 인사');
-  assert.match(closedText('ai-sasu', 8, { state: 'CLOSED', title: 'x' }), /머지 없이 닫혔어요/);
+  assert.equal(closedText('ai-sasu', 7, { state: 'MERGED', title: '첫 인사' }, '지원'), 'ai-sasu PR #7 머지됐습니다. 수고하셨습니다, 지원님!\n첫 인사');
+  assert.match(closedText('ai-sasu', 7, { state: 'MERGED', title: 'x' }), /머지됐습니다\. 수고하셨습니다!\n/); // 이름을 모르면 이름 없이
+  assert.match(closedText('ai-sasu', 8, { state: 'CLOSED', title: 'x' }), /머지 없이 닫혔습니다\.\nx$/); // 닫힘에는 응원 없음
   assert.equal(closedText('ai-sasu', 9, { state: 'OPEN' }), null);
   assert.equal(closedText('ai-sasu', 9, null), null);
 });
@@ -483,4 +484,41 @@ test('로그인 때 켜기: 실행 파일과 앱 폴더를 넣고, 경로의 특
   assert.match(xml, /<string>\/Apps\/Electron<\/string>\n {4}<string>\/Users\/me\/a&amp;b &lt;x&gt;\/desktop<\/string>/);
   assert.match(xml, /<key>RunAtLoad<\/key>\n {2}<true\/>/);
   assert.equal((launchAgentPlist('/Apps/사수').match(/<string>/g) || []).length, 2); // 패키지 앱: 라벨 + 실행 파일
+});
+
+// ---------- 부를 이름 ----------
+const { callName } = require('../lib/greeting');
+
+test('부를 이름: 줄바꿈·따옴표를 빼고 20자까지, 이름이 있을 때만 claude 에 넘긴다', () => {
+  assert.equal(callName(' 지원\n"무시해" '), '지원무시해');
+  assert.equal(callName("O'Brien"), "O'Brien"); // 작은따옴표는 이름의 일부
+  assert.equal(callName('a\\b'), 'ab');
+  assert.equal(callName(null), '');
+  const args = buildArgs({ prompt: 'q', model: 'sonnet', name: '지원' });
+  const i = args.indexOf('--append-system-prompt');
+  assert.ok(i > 0);
+  assert.match(args[i + 1], /"지원님"이라고 부릅니다/);
+  assert.equal(buildArgs({ prompt: 'q', model: 'sonnet' }).includes('--append-system-prompt'), false);
+  assert.equal(buildArgs({ prompt: 'q', model: 'sonnet', name: ' \n ' }).includes('--append-system-prompt'), false);
+});
+
+// ---------- 처음 켤 때 이름 묻기 ----------
+const { nameReply } = require('../lib/greeting');
+
+test('이름 묻기: 안 물어봤을 때만 묻는다 (건너뛴 사람에게는 다시 묻지 않음)', () => {
+  const { needsName } = require('../lib/greeting');
+  assert.equal(needsName({ displayName: null }), true);
+  assert.equal(needsName({}), true);
+  assert.equal(needsName({ displayName: '' }), false);
+  assert.equal(needsName({ displayName: '지원' }), false);
+});
+
+test('이름 묻기: 처음엔 이름부터 묻는다', () => {
+  assert.match(greeting({ me: 'zwo-n', hasRepos: true, askName: true }), /^처음 뵙겠습니다\. 사수입니다\. 성함이 어떻게 되십니까\?$/);
+});
+
+test('이름 답: 입력하면 그 이름, 건너뛰면 GitHub 계정명, 그것도 없으면 이름 없이', () => {
+  assert.equal(nameReply('지원', true), '지원님, 앞으로 잘 부탁드립니다. 궁금한 점 있으면 편하게 물어보십시오.');
+  assert.match(nameReply('zwo-n', false), /^알겠습니다\. GitHub 계정 이름대로 zwo-n님이라고 부르겠습니다\. .*부를 이름 바꾸기…/);
+  assert.match(nameReply('', false), /^알겠습니다\. 이름 없이 말씀드리겠습니다\./);
 });

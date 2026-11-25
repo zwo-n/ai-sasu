@@ -32,17 +32,17 @@ function planImport(files) {
   let unnamed = null; // 표정을 모르는 첫 장
   for (const { path: file, size } of files) {
     const ext = path.extname(file).toLowerCase();
-    if (!IMAGE_TYPES[ext]) { skipped.push({ file, reason: '그림 파일이 아니에요' }); continue; }
-    if (SHRINKABLE.has(ext) && size > MAX_SHRINKABLE) { skipped.push({ file, reason: '50MB가 넘어요' }); continue; }
-    if (!SHRINKABLE.has(ext) && size > MAX_AS_IS) { skipped.push({ file, reason: 'gif·svg는 그대로 쓰니 5MB까지예요' }); continue; }
+    if (!IMAGE_TYPES[ext]) { skipped.push({ file, reason: '그림 파일이 아닙니다' }); continue; }
+    if (SHRINKABLE.has(ext) && size > MAX_SHRINKABLE) { skipped.push({ file, reason: '50MB가 넘습니다' }); continue; }
+    if (!SHRINKABLE.has(ext) && size > MAX_AS_IS) { skipped.push({ file, reason: 'gif·svg는 그대로 쓰니 5MB까지입니다' }); continue; }
     const mood = moodOf(file);
-    if (mood && plan[mood]) skipped.push({ file, reason: '같은 표정 그림이 이미 있어요' });
+    if (mood && plan[mood]) skipped.push({ file, reason: '같은 표정 그림이 이미 있습니다' });
     else if (mood) plan[mood] = file;
     else if (!unnamed) unnamed = file;
-    else skipped.push({ file, reason: '어느 표정인지 몰라요 (파일 이름에 idle·happy 또는 기본·신남 같은 말을 넣어 주세요)' });
+    else skipped.push({ file, reason: '어느 표정인지 모르겠습니다 (파일 이름에 idle·happy 또는 기본·신남 같은 말을 넣어 주십시오)' });
   }
   if (!plan.idle) plan.idle = unnamed || Object.values(plan)[0];
-  else if (unnamed) skipped.push({ file: unnamed, reason: '어느 표정인지 몰라요 (평소 그림은 이미 있어요)' });
+  else if (unnamed) skipped.push({ file: unnamed, reason: '어느 표정인지 모르겠습니다 (평소 그림은 이미 있습니다)' });
   return { plan: plan.idle ? plan : null, skipped };
 }
 

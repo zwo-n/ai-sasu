@@ -1,6 +1,7 @@
 // claude CLI 를 -p 로 불러 구독으로 답을 받는다. API 키를 쓰지 않는다.
 const { spawn: nodeSpawn } = require('node:child_process');
 const path = require('node:path');
+const { callName } = require('./greeting');
 
 // 사수는 읽기만 한다. 코드는 팀원이 고친다.
 const READ_ONLY_TOOLS = [
@@ -24,7 +25,7 @@ function findSasuScript(installed, exists) {
 }
 const BLOCKED_TOOLS = ['Edit', 'Write', 'NotebookEdit', 'WebFetch', 'WebSearch'];
 
-function buildArgs({ prompt, model, agent, resume, sasuScript }) {
+function buildArgs({ prompt, model, agent, resume, sasuScript, name }) {
   const safePrompt = prompt.startsWith('-') ? ' ' + prompt : prompt;
   const ledger = sasuScript ? [`Bash(python3 "${sasuScript}":*)`, `Bash(python3 ${sasuScript}:*)`] : [];
   const args = ['-p', safePrompt, '--output-format', 'json',
@@ -33,6 +34,8 @@ function buildArgs({ prompt, model, agent, resume, sasuScript }) {
     '--model', model];
   if (agent) args.push('--agent', agent);
   if (resume) args.push('--resume', resume);
+  const who = callName(name); // 사수가 답에서 부를 이름 (말투 규칙은 agents/senior-dev.md)
+  if (who) args.push('--append-system-prompt', `팀원의 이름은 "${who}"입니다. 부를 때는 "${who}님"이라고 부릅니다.`);
   return args;
 }
 
@@ -45,7 +48,7 @@ function runClaude(opts, spawn = nodeSpawn) {
     try {
       p = spawn(claudePath, buildArgs(opts), { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
     } catch (e) {
-      return resolve({ text: `claude 를 실행하지 못했어요: ${e.message}`, sessionId: null, costUsd: 0, isError: true });
+      return resolve({ text: `claude 를 실행하지 못했습니다: ${e.message}`, sessionId: null, costUsd: 0, isError: true });
     }
     const timer = setTimeout(() => p.kill('SIGTERM'), timeoutMs);
     p.stdout.on('data', d => { out += d; });

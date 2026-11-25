@@ -119,5 +119,29 @@ class TestReviewFormat(unittest.TestCase):
         self.assertIn("'잘한 점'", summary)
 
 
+
+class TestTone(unittest.TestCase):
+    def test_mentor_speaks_danakka_with_name(self):
+        text = AGENT.read_text(encoding="utf-8")
+        tone = text[text.index("## 말투"):text.index("## 장부")]
+        self.assertIn("다나까체", tone)
+        self.assertIn("님", tone)
+        self.assertIn("응원", tone)
+        self.assertNotIn('존댓말("~요")', tone)
+
+    def test_sasu_example_lines_are_not_haeyo(self):
+        # 사수가 하는 말의 예시는 다나까체. 팀원이 하는 말(트리거 문구 등)은 그대로 둔다
+        lines = {
+            "review": ['"없습니다" 한 줄', '고친 뒤에 보겠습니다"'],
+            "debug": ['"어디가 의심됩니까?"'],
+            "ask": ['"이렇게 찾았습니다"'],
+            "growth": ['"아직 기록이 없습니다.'],
+        }
+        for skill, needles in lines.items():
+            text = (ROOT / "skills" / skill / "SKILL.md").read_text(encoding="utf-8")
+            for n in needles:
+                self.assertIn(n, text, f"{skill}: {n}")
+
+
 if __name__ == "__main__":
     unittest.main()

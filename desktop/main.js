@@ -10,7 +10,7 @@ const { diffPRs, baselineNote, prLabel, readyCount, seenAfterPick } = require('.
 const { summarize, bubbleCard } = require('./lib/summary');
 const { IMAGE_TYPES, planImport } = require('./lib/character');
 const { removeBackground, cutoutMethod } = require('./lib/cutout');
-const { greeting } = require('./lib/greeting');
+const { greeting, callName, nameReply, needsName } = require('./lib/greeting');
 const { LABEL, launchAgentPlist } = require('./lib/autostart');
 const { addNotice, unreadCount, groupByDay, closedPRs, closedText, seedFromReviews } = require('./lib/notices');
 const { Usage } = require('./lib/usage');
@@ -47,6 +47,7 @@ const today = () => new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD (로�
 const saveState = () => saveJson(STATE_FILE, state);
 const send = (ch, data) => win && !win.isDestroyed() && win.webContents.send(ch, data);
 const repoName = repo => path.basename(repo);
+const myName = () => callName(config.displayName || state.ghLogin); // 사수가 부를 이름
 
 // Finder 에서 켜면 PATH 가 짧아서 claude·gh 를 못 찾는다. 로그인 셸의 PATH 를 빌린다.
 function loginEnv() {
@@ -195,7 +196,7 @@ async function replaceCharacter() {
   if (r.canceled || !r.filePaths.length) return;
   const { plan, skipped } = planImport(r.filePaths.map(p => ({ path: p, size: fs.statSync(p).size })));
   const why = skipped.map(x => `· ${path.basename(x.file)}: ${x.reason}`).join('\n');
-  if (!plan) { dialog.showErrorBox('캐릭터를 바꾸지 못했어요', why || '쓸 수 있는 그림이 없어요.'); return; }
+  if (!plan) { dialog.showErrorBox('캐릭터를 바꾸지 못했습니다', why || '쓸 수 있는 그림이 없습니다.'); return; }
   // 새 폴더를 옆에 다 만든 뒤 갈아 끼운다: 기존 것을 .old 로 옮기고 → 새것을 넣고 → .old 정리.
   // 어느 단계에서 실패해도 기존 캐릭터가 남는다.
   const tmp = MY_CHAR_DIR + '.new';
@@ -215,13 +216,13 @@ async function replaceCharacter() {
     }
   } catch (e) {
     fs.rmSync(tmp, { recursive: true, force: true });
-    dialog.showErrorBox('캐릭터를 바꾸지 못했어요', `그림을 처리하다 문제가 생겼어요. 지금 캐릭터는 그대로예요.\n${e.message}`);
+    dialog.showErrorBox('캐릭터를 바꾸지 못했습니다', `그림을 처리하다 문제가 생겼습니다. 지금 캐릭터는 그대로입니다.\n${e.message}`);
     return;
   }
   try { fs.rmSync(old, { recursive: true, force: true }); } catch { /* 새 캐릭터는 이미 들어갔다. 남은 .old 는 다음에 지운다 */ }
   useCharacter(MY_CHAR_DIR);
   const n = Object.keys(plan).length;
-  bubble(`새 모습이에요! 표정 ${n}개를 넣었어요.${cut ? ` 배경 ${cut}장을 지웠어요.` : ''}${n < 5 ? ' 없는 표정은 평소 그림으로 보여요.' : ''}${why ? '\n건너뛴 그림:\n' + why : ''}`, null, null, { keep: false });
+  bubble(`새 모습입니다! 표정 ${n}개를 넣었습니다.${cut ? ` 배경 ${cut}장을 지웠습니다.` : ''}${n < 5 ? ' 없는 표정은 평소 그림으로 보입니다.' : ''}${why ? '\n건너뛴 그림:\n' + why : ''}`, null, null, { keep: false });
 }
 
 function characterMenu() {
@@ -240,7 +241,7 @@ function characterMenu() {
 // ---------- AI 호출 한도 ----------
 function takeQuota() {
   if (usage.take(today())) { saveState(); return true; }
-  bubble(`오늘 AI 호출 한도(${config.dailyLimit}번)를 다 썼어요. 내일 다시 볼게요.`);
+  bubble(`오늘 AI 호출 한도(${config.dailyLimit}번)를 다 썼습니다. 내일 다시 보겠습니다.`);
   return false;
 }
 
@@ -264,7 +265,7 @@ async function poll({ only = null, force = false } = {}) {
     const first = !state.seen?.[repo]; // 처음 보는 저장소
     if (r.error) {
       state.errors[repo] = r.error;
-      if (only) notes.push(`${repoName(repo)} PR 목록을 못 읽었어요: ${r.error.slice(0, 100)}`);
+      if (only) notes.push(`${repoName(repo)} PR 목록을 못 읽었습니다: ${r.error.slice(0, 100)}`);
       continue;
     }
     delete state.errors[repo];
@@ -287,7 +288,7 @@ function tellClosed(repo, number) {
   execFile(config.ghPath || 'gh', ['pr', 'view', String(number), '--json', 'state,title'], { cwd: repo, env, timeout: 30000 }, (err, stdout) => {
     let pr;
     try { pr = JSON.parse(stdout); } catch { return; }
-    const text = !err && closedText(repoName(repo), number, pr);
+    const text = !err && closedText(repoName(repo), number, pr, myName());
     if (text) bubble(text);
   });
 }
@@ -298,7 +299,7 @@ async function reviewOne(repo, number) {
   if (r.prs) { openPRs[repo] = r.prs; buildTray(); } // 고르는 김에 메뉴 목록도 새로 고친다
   const pr = r.prs?.find(p => p.number === number);
   if (!pr) {
-    bubble(r.error ? `${repoName(repo)} PR 목록을 못 읽었어요: ${r.error.slice(0, 100)}` : `${repoName(repo)} PR #${number}을 찾지 못했어요. 닫혔을 수 있어요.`);
+    bubble(r.error ? `${repoName(repo)} PR 목록을 못 읽었습니다: ${r.error.slice(0, 100)}` : `${repoName(repo)} PR #${number}을 찾지 못했습니다. 닫혔을 수 있습니다.`);
     return;
   }
   state.seen = { ...state.seen, [repo]: seenAfterPick(state.seen?.[repo], r.prs, pr, { reviewDrafts: config.reviewDrafts }) };
@@ -329,12 +330,12 @@ const REASON = { new: ' 새 PR', updated: ' 새 푸시', manual: '' };
 async function runReview({ repo, pr, reason }) {
   mood('thinking');
   bubble(`${repoName(repo)} PR #${pr.number}${REASON[reason] || ''} 보는 중…`, null, null, { keep: false });
-  const r = await runClaude({ prompt: `/sasu:review ${pr.number}`, model: config.reviewModel, cwd: repo, claudePath: config.claudePath || 'claude', env, sasuScript });
+  const r = await runClaude({ prompt: `/sasu:review ${pr.number}`, name: myName(), model: config.reviewModel, cwd: repo, claudePath: config.claudePath || 'claude', env, sasuScript });
   const id = `${repoName(repo)}-${pr.number}-${pr.headRefOid.slice(0, 7)}`;
   fs.mkdirSync(REVIEW_DIR, { recursive: true });
   fs.writeFileSync(path.join(REVIEW_DIR, id + '.md'), r.text);
   if (r.isError) {
-    bubble(`PR #${pr.number} 리뷰를 못 했어요: ${r.text.slice(0, 120)}`);
+    bubble(`PR #${pr.number} 리뷰를 못 했습니다: ${r.text.slice(0, 120)}`);
     mood('idle');
     return;
   }
@@ -388,7 +389,8 @@ function loadGhLogin() {
 }
 
 handle('app:info', () => ({
-  greeting: greeting({ me: config.displayName || state.ghLogin, hasRepos: config.repos.length > 0 }),
+  greeting: greeting({ me: myName(), hasRepos: config.repos.length > 0, askName: needsName(config) }),
+  askName: needsName(config),
   repos: config.repos.map(r => ({ path: r, name: repoName(r) })),
   left: usage.left(today()),
   dnd: Boolean(state.dnd),
@@ -412,18 +414,27 @@ on('notices:read', id => {
   buildTray();
 });
 
+// 부를 이름 저장. 빈 값이면 '건너뜀'으로 남겨 다시 묻지 않고 GitHub 계정명을 쓴다
+handle('name:set', raw => {
+  if (typeof raw !== 'string') return null;
+  config.displayName = callName(raw);
+  saveJson(CONFIG_FILE, config);
+  buildTray();
+  return { reply: nameReply(myName(), Boolean(config.displayName)) };
+});
+
 // ---------- AI ② 대화 ----------
 handle('chat:send', async msg => {
   const text = typeof msg?.text === 'string' ? msg.text.trim().slice(0, MAX_CHAT) : '';
   if (!text) return null;
-  if (chatBusy) return { html: renderMarkdown('앞 질문에 답하는 중이에요. 조금만 기다려 주세요.'), isError: true };
+  if (chatBusy) return { html: renderMarkdown('앞 질문에 답하는 중입니다. 조금만 기다려 주십시오.'), isError: true };
   const cwd = config.repos.includes(msg.repo) ? msg.repo : (config.repos[0] || app.getPath('home'));
-  if (!takeQuota()) return { html: renderMarkdown('오늘 한도를 다 썼어요.'), isError: true };
+  if (!takeQuota()) return { html: renderMarkdown('오늘 한도를 다 썼습니다.'), isError: true };
   chatBusy = true;
   mood('thinking');
   state.sessions = state.sessions || {};
   const r = await runClaude({
-    prompt: text, model: config.chatModel, agent: 'sasu:senior-dev', resume: state.sessions[cwd],
+    prompt: text, name: myName(), model: config.chatModel, agent: 'sasu:senior-dev', resume: state.sessions[cwd],
     cwd, claudePath: config.claudePath || 'claude', env, sasuScript,
   });
   chatBusy = false;
@@ -464,7 +475,7 @@ function setAutoStart(on) {
       fs.rmSync(AGENT_FILE, { force: true });
     }
   } catch (e) {
-    dialog.showErrorBox('설정을 바꾸지 못했어요', e.message);
+    dialog.showErrorBox('설정을 바꾸지 못했습니다', e.message);
   }
   buildTray();
 }
@@ -475,7 +486,7 @@ async function addRepo() {
   if (r.canceled || !r.filePaths[0]) return;
   const repo = r.filePaths[0];
   if (!fs.existsSync(path.join(repo, '.git'))) {
-    dialog.showErrorBox('git 저장소가 아니에요', `${repo} 에 .git 폴더가 없습니다.`);
+    dialog.showErrorBox('git 저장소가 아닙니다', `${repo} 에 .git 폴더가 없습니다.`);
     return;
   }
   if (!config.repos.includes(repo)) config.repos.push(repo);
@@ -536,6 +547,7 @@ function buildTray() {
       label: `${repoName(r.repo)} #${r.number} · ${r.line}`, click: () => send('open-review', r.id),
     })) : [{ label: '없음', enabled: false }] },
     { label: '캐릭터', submenu: characterMenu() },
+    { label: `부를 이름 바꾸기…${myName() ? ` (지금: ${myName()}님)` : ''}`, click: () => send('ask-name') },
     { label: '방해 금지', type: 'checkbox', checked: Boolean(state.dnd), click: m => setDnd(m.checked) },
     { label: '캐릭터 숨기기', type: 'checkbox', checked: !win.isVisible(), click: m => (m.checked ? win.hide() : win.showInactive()) },
     { label: '캐릭터 위치 처음으로', click: resetPosition },
@@ -583,7 +595,7 @@ app.whenReady().then(() => {
   // 미리보기: SASU_DEMO=1 npm start → 표정 다섯 가지와 말풍선을 차례로 보여 준다 (AI 안 씀)
   if (process.env.SASU_DEMO) {
     let i = 0;
-    const lines = ['안녕하세요, 사수예요.', 'PR #12 보는 중…', 'PR #12 환불 처리\n막힘 · 반드시 2 · 권장 1\n· 환불이 실패해도 "환불됨"으로 처리돼요', 'PR #13 머지 가능 · 깔끔해요!', '방해 금지 중이에요 zZ'];
+    const lines = ['안녕하십니까, 사수입니다.', 'PR #12 보는 중…', 'PR #12 환불 처리\n막힘 · 반드시 2 · 권장 1\n· 환불이 실패해도 "환불됨"으로 처리됩니다', 'PR #13 머지 가능 · 깔끔합니다!', '방해 금지 중입니다 zZ'];
     setInterval(() => { win.webContents.send('mood', MOODS[i % 5]); win.webContents.send('bubble', { text: lines[i % 5] }); i++; }, 2500);
   }
 });

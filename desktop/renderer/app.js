@@ -94,6 +94,7 @@ function fill(target, { text, reviewId, card, noticeId }) {
   target.dataset.notice = noticeId || '';
 }
 function showBubble(msg) {
+  if (asking) return; // 이름을 묻는 중에는 덮지 않는다 (지나간 알림에는 남는다)
   fill(bubbleEl, msg);
   bubbleLive = true;
   if (panel.hidden) bubbleEl.hidden = false;
@@ -108,6 +109,7 @@ function hideBubble() {
   if (['warn', 'happy'].includes(buddy.dataset.mood)) setMood('idle');
 }
 function clickBubble(e) {
+  if (e.currentTarget === bubbleEl && asking) return; // 이름 칸을 누른 것
   const id = e.currentTarget.dataset.review;
   if (e.currentTarget.dataset.notice) window.sasu.readNotice(e.currentTarget.dataset.notice);
   hideBubble();
@@ -129,12 +131,12 @@ function openPanel() {
   panel.hidden = false;
   bubbleEl.hidden = true;
   window.sasu.focus();
-  setTimeout(() => input.focus(), 50);
+  setTimeout(() => (log.querySelector('.name-form input') || input).focus(), 50); // 이름을 묻는 중이면 그 칸부터
 }
 function closePanel() {
   panel.hidden = true;
   notice.hidden = true;
-  if (bubbleLive) bubbleEl.hidden = false; // 아직 볼 때가 남은 말풍선은 다시 보여 준다
+  if (bubbleLive || asking) bubbleEl.hidden = false; // 아직 볼 때가 남은 말풍선·이름 묻기는 다시 보여 준다
 }
 function togglePanel() { panel.hidden ? openPanel() : closePanel(); }
 
@@ -261,7 +263,7 @@ async function showNotices() {
   panel.classList.add('reviewing');
   setTitle('최근 7일', '지나간 알림');
   log.replaceChildren(...(groups.length ? groups.flatMap(g => [el('h2', 'nt-day', g.label), ...g.items.map(noticeItem)])
-    : [el('p', 'nt-empty', '아직 지나간 알림이 없어요. 리뷰 결과·머지 소식이 오면 여기에 모여요.')]));
+    : [el('p', 'nt-empty', '아직 지나간 알림이 없습니다. 리뷰 결과·머지 소식이 오면 여기에 모입니다.')]));
   log.scrollTop = keepScroll;
   $('review-bar').hidden = true;
   $('back').hidden = false;
@@ -346,7 +348,7 @@ $('new-chat').addEventListener('click', async () => {
   log.innerHTML = '';
   log.dataset.chat = '';
   showChat();
-  add('sasu', '<p>새 대화예요. 무엇이든 물어보세요.</p>');
+  add('sasu', '<p>새 대화입니다. 무엇이든 물어보십시오.</p>');
 });
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
@@ -373,21 +375,87 @@ async function load() {
   $('sasu').style.display = info.character ? 'none' : '';
   setMood(info.dnd ? 'sleep' : 'idle');
   setBadge(info.unread);
-  // 첫 인사는 대화가 아직 없을 때만, 지금 저장소 상태에 맞게 다시 쓴다
+  // 첫 인사는 대화가 아직 없을 때만, 지금 저장소 상태에 맞게 다시 쓴다. 이름을 입력하는 중이면 그대로 둔다
   const onlyGreeting = inChat() && [...log.children].every(c => c.classList.contains('greet'));
-  if (onlyGreeting) {
+  if (onlyGreeting && !log.querySelector('.greet .name-form')) {
     log.innerHTML = '';
-    const span = add('sasu greet', info.greeting, true).firstChild; // 이름이 들어가니 글자로만 넣는다
-    const key = '사수 → 저장소 추가…'; // 눌러야 할 메뉴는 굵게
-    const at = info.greeting.indexOf(key);
-    if (at >= 0) span.replaceChildren(info.greeting.slice(0, at), el('b', '', key), info.greeting.slice(at + key.length));
+    const g = addSasuText('sasu greet', info.greeting);
+    if (info.askName) g.append(nameForm(reply => addSasuText('sasu', reply))); // 대화창을 먼저 열었을 때
   }
+  if (info.askName && !askedOnce) { // 처음 켰을 때: 대화창 없이 말풍선에서 바로 묻는다
+    askedOnce = true;
+    askInBubble('처음 뵙겠습니다. 사수입니다.\n성함이 어떻게 되십니까?');
+  }
+}
+
+// 사수의 글자 답. 이름이 들어가니 글자로만 넣고, 눌러야 할 메뉴 이름만 굵게
+const MENU_KEYS = ['사수 → 저장소 추가…', '사수 → 부를 이름 바꾸기…'];
+function addSasuText(cls, text) {
+  const d = add(cls, text, true);
+  const parts = text.split(/(사수 → 저장소 추가…|사수 → 부를 이름 바꾸기…)/);
+  d.firstChild.replaceChildren(...parts.map(p => (MENU_KEYS.includes(p) ? el('b', '', p) : p)));
+  return d;
+}
+
+// 이름 묻기 칸: 입력하면 그 이름, 건너뛰면(빈 칸) GitHub 계정명으로 부른다. 사수의 답은 onReply 로
+let askedOnce = false;
+let asking = false; // 말풍선에서 이름을 묻는 중
+function nameForm(onReply) {
+  const form = el('form', 'name-form');
+  const box = el('input', '');
+  box.maxLength = 20;
+  box.placeholder = '예: 지원';
+  const ok = el('button', 'primary', '확인');
+  ok.type = 'submit';
+  const skip = el('button', 'skip', '건너뛰기');
+  skip.type = 'button';
+  form.append(box, ok, skip);
+  const done = async name => {
+    form.remove();
+    const r = await window.sasu.setName(name);
+    if (!r) return;
+    endAsking();
+    await load();
+    onReply(r.reply);
+  };
+  form.addEventListener('submit', e => { e.preventDefault(); done(box.value.trim()); });
+  skip.addEventListener('click', () => done(''));
+  // 캐릭터 창은 평소 포커스를 받지 않으니, 칸을 누르면 창부터 깨운다
+  box.addEventListener('pointerdown', () => { window.sasu.focus(); setTimeout(() => box.focus(), 30); });
+  setTimeout(() => box.isConnected && !box.closest('[hidden]') && box.focus(), 80);
+  return form;
+}
+
+function askInBubble(text) {
+  asking = true;
+  bubbleLive = false;
+  clearTimeout(bubbleTimer);
+  bubbleEl.classList.remove('card', 'has-review');
+  bubbleEl.classList.add('asking');
+  bubbleEl.dataset.review = '';
+  bubbleEl.dataset.notice = '';
+  bubbleEl.replaceChildren(el('div', 'ask-text', text), nameForm(reply => showBubble({ text: reply })));
+  if (panel.hidden) { bubbleEl.hidden = false; window.sasu.focus(); }
+}
+
+function endAsking() {
+  log.querySelectorAll('.name-form').forEach(f => f.remove());
+  if (!asking) return;
+  asking = false;
+  bubbleEl.classList.remove('asking');
+  bubbleEl.hidden = true;
 }
 
 window.sasu.on('mood', setMood);
 window.sasu.on('bubble', showBubble);
 window.sasu.on('open-review', id => openReview(id));
 window.sasu.on('open-notices', showNotices);
+window.sasu.on('ask-name', () => { // 메뉴 '부를 이름 바꾸기…': 대화창이 닫혀 있으면 말풍선에서, 열려 있으면 대화창에서
+  endAsking();
+  if (panel.hidden) { askInBubble('어떻게 불러 드리면 되겠습니까?'); return; }
+  if (!inChat()) showChat();
+  addSasuText('sasu', '어떻게 불러 드리면 되겠습니까?').append(nameForm(reply => addSasuText('sasu', reply)));
+});
 window.sasu.on('notices', n => {
   setBadge(n);
   if (n && log.dataset.mode === 'notices') showNotices(); // 보고 있는 목록에 새 알림을 바로 넣는다

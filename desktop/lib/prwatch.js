@@ -17,10 +17,10 @@ function diffPRs(seen, prs, { reviewDrafts = false } = {}) {
 // 저장소를 처음 볼 때 건너뛴 PR 을 알려 줄 말. seen 은 diffPRs 가 돌려준 것 (드래프트 빠짐)
 function baselineNote(name, seen) {
   const nums = Object.keys(seen).map(Number).sort((a, b) => b - a);
-  if (!nums.length) return `${name} 지켜볼게요. 새 PR을 올리면 리뷰할게요.`;
+  if (!nums.length) return `${name} 지켜보겠습니다. 새 PR을 올리면 리뷰하겠습니다.`;
   const list = nums.slice(0, 3).map(n => `#${n}`).join(', ') + (nums.length > 3 ? ` 외 ${nums.length - 3}개` : '');
-  return `${name} 지켜볼게요. 이미 열려 있던 PR ${nums.length}개(${list})는 건너뛰었어요. `
-    + '메뉴 막대 사수 → 지켜보는 저장소에서 골라 리뷰할 수 있어요.';
+  return `${name} 지켜보겠습니다. 이미 열려 있던 PR ${nums.length}개(${list})는 건너뛰었습니다. `
+    + '메뉴 막대 사수 → 지켜보는 저장소에서 골라 리뷰할 수 있습니다.';
 }
 
 // 메뉴에 보일 PR 이름
