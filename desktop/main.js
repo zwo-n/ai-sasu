@@ -10,7 +10,7 @@ const { diffPRs, baselineNote, prLabel, readyCount, seenAfterPick } = require('.
 const { summarize, bubbleCard } = require('./lib/summary');
 const { IMAGE_TYPES, planImport } = require('./lib/character');
 const { removeBackground, cutoutMethod } = require('./lib/cutout');
-const { greeting, callName, nameReply } = require('./lib/greeting');
+const { greeting, callName, nameReply, needsName } = require('./lib/greeting');
 const { LABEL, launchAgentPlist } = require('./lib/autostart');
 const { addNotice, unreadCount, groupByDay, closedPRs, closedText, seedFromReviews } = require('./lib/notices');
 const { Usage } = require('./lib/usage');
@@ -389,8 +389,8 @@ function loadGhLogin() {
 }
 
 handle('app:info', () => ({
-  greeting: greeting({ me: myName(), hasRepos: config.repos.length > 0, askName: config.displayName === null }),
-  askName: config.displayName === null,
+  greeting: greeting({ me: myName(), hasRepos: config.repos.length > 0, askName: needsName(config) }),
+  askName: needsName(config),
   repos: config.repos.map(r => ({ path: r, name: repoName(r) })),
   left: usage.left(today()),
   dnd: Boolean(state.dnd),

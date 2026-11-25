@@ -1,8 +1,13 @@
 // 대화창 첫 인사. 이름은 처음 켤 때 묻고(displayName), 건너뛰면 GitHub 계정명을 쓴다. 화면에는 글자로만 넣는다.
-// 부를 이름: 앞뒤 공백·줄바꿈·따옴표를 빼고 20자까지. AI 지시문에도 들어가니 글자만 남긴다.
+// 부를 이름: 앞뒤 공백과 줄바꿈 등 제어문자, 큰따옴표·역슬래시를 빼고 20자까지.
+// AI 지시문의 "…" 안에 들어가니 그 따옴표를 깨는 글자만 뺀다 (O'Brien 의 작은따옴표는 남긴다).
 function callName(me) {
-  return typeof me === 'string' ? me.replace(/[\u0000-\u001f\u007f"'`\\]/g, '').trim().slice(0, 20) : '';
+  return typeof me === 'string' ? me.replace(/[\u0000-\u001f\u007f"\\]/g, '').trim().slice(0, 20) : '';
 }
+
+// 이름을 아직 묻지 않았나. displayName: null = 안 물어봄, "" = 건너뜀(GitHub 계정명), "지원" = 입력함
+// 판단은 여기 한 곳에서만 한다 (!displayName 으로 보면 건너뛴 사람에게 또 묻게 된다)
+const needsName = config => config.displayName === null || config.displayName === undefined;
 
 // askName: 아직 이름을 묻지 않았다 (처음 켬)
 function greeting({ me, hasRepos, askName = false }) {
@@ -21,4 +26,4 @@ function nameReply(name, typed) {
   return `알겠습니다. 이름 없이 말씀드리겠습니다. ${CHANGE}`;
 }
 
-module.exports = { greeting, callName, nameReply };
+module.exports = { greeting, callName, nameReply, needsName };

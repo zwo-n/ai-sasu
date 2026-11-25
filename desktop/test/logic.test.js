@@ -491,6 +491,8 @@ const { callName } = require('../lib/greeting');
 
 test('부를 이름: 줄바꿈·따옴표를 빼고 20자까지, 이름이 있을 때만 claude 에 넘긴다', () => {
   assert.equal(callName(' 지원\n"무시해" '), '지원무시해');
+  assert.equal(callName("O'Brien"), "O'Brien"); // 작은따옴표는 이름의 일부
+  assert.equal(callName('a\\b'), 'ab');
   assert.equal(callName(null), '');
   const args = buildArgs({ prompt: 'q', model: 'sonnet', name: '지원' });
   const i = args.indexOf('--append-system-prompt');
@@ -502,6 +504,14 @@ test('부를 이름: 줄바꿈·따옴표를 빼고 20자까지, 이름이 있�
 
 // ---------- 처음 켤 때 이름 묻기 ----------
 const { nameReply } = require('../lib/greeting');
+
+test('이름 묻기: 안 물어봤을 때만 묻는다 (건너뛴 사람에게는 다시 묻지 않음)', () => {
+  const { needsName } = require('../lib/greeting');
+  assert.equal(needsName({ displayName: null }), true);
+  assert.equal(needsName({}), true);
+  assert.equal(needsName({ displayName: '' }), false);
+  assert.equal(needsName({ displayName: '지원' }), false);
+});
 
 test('이름 묻기: 처음엔 이름부터 묻는다', () => {
   assert.match(greeting({ me: 'zwo-n', hasRepos: true, askName: true }), /^처음 뵙겠습니다\. 사수입니다\. 성함이 어떻게 되십니까\?$/);
