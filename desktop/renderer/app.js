@@ -259,7 +259,7 @@ async function showNotices() {
   panel.classList.add('reviewing');
   setTitle('최근 7일', '지나간 알림');
   log.replaceChildren(...(groups.length ? groups.flatMap(g => [el('h2', 'nt-day', g.label), ...g.items.map(noticeItem)])
-    : [el('p', 'nt-empty', '아직 지나간 알림이 없어요. 리뷰 결과·머지 소식이 오면 여기에 모여요.')]));
+    : [el('p', 'nt-empty', '아직 지나간 알림이 없습니다. 리뷰 결과·머지 소식이 오면 여기에 모입니다.')]));
   log.scrollTop = 0;
   $('review-bar').hidden = false;
   $('open-pr').hidden = true;
@@ -325,7 +325,7 @@ $('new-chat').addEventListener('click', async () => {
   log.innerHTML = '';
   log.dataset.chat = '';
   showChat();
-  add('sasu', '<p>새 대화예요. 무엇이든 물어보세요.</p>');
+  add('sasu', '<p>새 대화입니다. 무엇이든 물어보십시오.</p>');
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel(); });
 

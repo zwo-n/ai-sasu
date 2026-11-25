@@ -60,7 +60,7 @@ PR 확인(`gh pr list`), 리뷰 요약, 표정 바꾸기는 AI를 쓰지 않습�
 | `reviewModel` / `chatModel` | `sonnet` | 리뷰·대화 모델 (`haiku`로 바꾸면 사용량이 줄어듦) |
 | `dailyLimit` | 30 | 하루 AI 호출 한도 |
 | `reviewDrafts` | `false` | 드래프트 PR도 리뷰할지 |
-| `displayName` | `null` | 첫 인사에 쓸 내 이름 ("지원" → "지원님의 PR이 올라오면…"). 비우면 GitHub 계정명 |
+| `displayName` | `null` | 사수가 부를 내 이름 ("지원" → 인사·답변·리뷰에서 "지원님", 머지되면 "수고하셨습니다, 지원님!"). 비우면 GitHub 계정명 |
 | `characterDir` | `null` | 캐릭터 그림 폴더. 메뉴에서 고르면 자동으로 채워짐. 비우면 엔젤이 |
 | `claudePath` / `ghPath` / `sasuScript` | `null` | 명령·장부 위치를 직접 지정할 때 |
 
