@@ -10,7 +10,7 @@ const { diffPRs, baselineNote, prLabel, readyCount, seenAfterPick } = require('.
 const { summarize, bubbleCard } = require('./lib/summary');
 const { IMAGE_TYPES, planImport } = require('./lib/character');
 const { removeBackground, cutoutMethod } = require('./lib/cutout');
-const { greeting, callName } = require('./lib/greeting');
+const { greeting, callName, nameReply } = require('./lib/greeting');
 const { LABEL, launchAgentPlist } = require('./lib/autostart');
 const { addNotice, unreadCount, groupByDay, closedPRs, closedText, seedFromReviews } = require('./lib/notices');
 const { Usage } = require('./lib/usage');
@@ -389,7 +389,8 @@ function loadGhLogin() {
 }
 
 handle('app:info', () => ({
-  greeting: greeting({ me: myName(), hasRepos: config.repos.length > 0 }),
+  greeting: greeting({ me: myName(), hasRepos: config.repos.length > 0, askName: config.displayName === null }),
+  askName: config.displayName === null,
   repos: config.repos.map(r => ({ path: r, name: repoName(r) })),
   left: usage.left(today()),
   dnd: Boolean(state.dnd),
@@ -411,6 +412,15 @@ on('notices:read', id => {
   saveState();
   send('notices', unreadCount(state.notices));
   buildTray();
+});
+
+// 부를 이름 저장. 빈 값이면 '건너뜀'으로 남겨 다시 묻지 않고 GitHub 계정명을 쓴다
+handle('name:set', raw => {
+  if (typeof raw !== 'string') return null;
+  config.displayName = callName(raw);
+  saveJson(CONFIG_FILE, config);
+  buildTray();
+  return { reply: nameReply(myName(), Boolean(config.displayName)) };
 });
 
 // ---------- AI ② 대화 ----------
@@ -537,6 +547,7 @@ function buildTray() {
       label: `${repoName(r.repo)} #${r.number} · ${r.line}`, click: () => send('open-review', r.id),
     })) : [{ label: '없음', enabled: false }] },
     { label: '캐릭터', submenu: characterMenu() },
+    { label: `부를 이름 바꾸기…${myName() ? ` (지금: ${myName()}님)` : ''}`, click: () => send('ask-name') },
     { label: '방해 금지', type: 'checkbox', checked: Boolean(state.dnd), click: m => setDnd(m.checked) },
     { label: '캐릭터 숨기기', type: 'checkbox', checked: !win.isVisible(), click: m => (m.checked ? win.hide() : win.showInactive()) },
     { label: '캐릭터 위치 처음으로', click: resetPosition },

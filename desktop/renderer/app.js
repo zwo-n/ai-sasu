@@ -129,7 +129,7 @@ function openPanel() {
   panel.hidden = false;
   bubbleEl.hidden = true;
   window.sasu.focus();
-  setTimeout(() => input.focus(), 50);
+  setTimeout(() => (log.querySelector('.name-form input') || input).focus(), 50); // 이름을 묻는 중이면 그 칸부터
 }
 function closePanel() {
   panel.hidden = true;
@@ -348,21 +348,63 @@ async function load() {
   $('sasu').style.display = info.character ? 'none' : '';
   setMood(info.dnd ? 'sleep' : 'idle');
   setBadge(info.unread);
-  // 첫 인사는 대화가 아직 없을 때만, 지금 저장소 상태에 맞게 다시 쓴다
+  // 첫 인사는 대화가 아직 없을 때만, 지금 저장소 상태에 맞게 다시 쓴다. 이름을 입력하는 중이면 그대로 둔다
   const onlyGreeting = inChat() && [...log.children].every(c => c.classList.contains('greet'));
-  if (onlyGreeting) {
+  if (onlyGreeting && !log.querySelector('.greet .name-form')) {
     log.innerHTML = '';
-    const span = add('sasu greet', info.greeting, true).firstChild; // 이름이 들어가니 글자로만 넣는다
-    const key = '사수 → 저장소 추가…'; // 눌러야 할 메뉴는 굵게
-    const at = info.greeting.indexOf(key);
-    if (at >= 0) span.replaceChildren(info.greeting.slice(0, at), el('b', '', key), info.greeting.slice(at + key.length));
+    const g = addSasuText('sasu greet', info.greeting);
+    if (info.askName) nameForm(g);
   }
+  if (info.askName && !firstHello && panel.hidden) { // 처음 켰을 때 한 번: 눌러서 이름을 알려 달라고
+    firstHello = true;
+    showBubble({ text: '처음 뵙겠습니다, 사수입니다. 저를 눌러 어떻게 불러 드릴지 알려 주십시오.' });
+  }
+}
+
+// 사수의 글자 답. 이름이 들어가니 글자로만 넣고, 눌러야 할 메뉴 이름만 굵게
+const MENU_KEYS = ['사수 → 저장소 추가…', '사수 → 부를 이름 바꾸기…'];
+function addSasuText(cls, text) {
+  const d = add(cls, text, true);
+  const parts = text.split(/(사수 → 저장소 추가…|사수 → 부를 이름 바꾸기…)/);
+  d.firstChild.replaceChildren(...parts.map(p => (MENU_KEYS.includes(p) ? el('b', '', p) : p)));
+  return d;
+}
+
+// 이름 묻기: 입력하면 그 이름, 건너뛰면(빈 칸) GitHub 계정명으로 부른다
+let firstHello = false;
+function nameForm(msg) {
+  const form = el('form', 'name-form');
+  const box = el('input', '');
+  box.maxLength = 20;
+  box.placeholder = '예: 지원';
+  const ok = el('button', 'primary', '저장');
+  ok.type = 'submit';
+  const skip = el('button', '', '건너뛰기');
+  skip.type = 'button';
+  form.append(box, ok, skip);
+  const done = async name => {
+    form.remove();
+    const r = await window.sasu.setName(name);
+    if (!r) return;
+    await load();
+    addSasuText('sasu', r.reply);
+  };
+  form.addEventListener('submit', e => { e.preventDefault(); done(box.value.trim()); });
+  skip.addEventListener('click', () => done(''));
+  msg.append(form);
+  setTimeout(() => box.focus(), 80);
 }
 
 window.sasu.on('mood', setMood);
 window.sasu.on('bubble', showBubble);
 window.sasu.on('open-review', id => openReview(id));
 window.sasu.on('open-notices', showNotices);
+window.sasu.on('ask-name', () => { // 메뉴 '부를 이름 바꾸기…'
+  if (!inChat()) showChat();
+  log.querySelectorAll('.name-form').forEach(f => f.remove());
+  openPanel();
+  nameForm(addSasuText('sasu', '어떻게 불러 드리면 되겠습니까?'));
+});
 window.sasu.on('notices', n => {
   setBadge(n);
   if (n && log.dataset.mode === 'notices') showNotices(); // 보고 있는 목록에 새 알림을 바로 넣는다

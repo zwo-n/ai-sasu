@@ -499,3 +499,16 @@ test('부를 이름: 줄바꿈·따옴표를 빼고 20자까지, 이름이 있�
   assert.equal(buildArgs({ prompt: 'q', model: 'sonnet' }).includes('--append-system-prompt'), false);
   assert.equal(buildArgs({ prompt: 'q', model: 'sonnet', name: ' \n ' }).includes('--append-system-prompt'), false);
 });
+
+// ---------- 처음 켤 때 이름 묻기 ----------
+const { nameReply } = require('../lib/greeting');
+
+test('이름 묻기: 처음엔 이름부터 묻는다', () => {
+  assert.match(greeting({ me: 'zwo-n', hasRepos: true, askName: true }), /어떻게 불러 드리면 되겠습니까\?$/);
+});
+
+test('이름 답: 입력하면 그 이름, 건너뛰면 GitHub 계정명, 그것도 없으면 이름 없이', () => {
+  assert.equal(nameReply('지원', true), '지원님, 잘 부탁드립니다. 코드 얘기면 뭐든 물어보십시오.');
+  assert.match(nameReply('zwo-n', false), /^알겠습니다\. GitHub 계정 이름대로 zwo-n님이라고 부르겠습니다\. .*부를 이름 바꾸기…/);
+  assert.match(nameReply('', false), /^알겠습니다\. 이름 없이 말씀드리겠습니다\./);
+});
