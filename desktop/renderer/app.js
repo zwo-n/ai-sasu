@@ -230,6 +230,7 @@ function showChat() {
   panel.classList.remove('reviewing');
   setTitle(null, '사수와 대화');
   $('review-bar').hidden = true;
+  $('back').hidden = true;
   $('ask').hidden = false;
   if (!inChat()) log.innerHTML = log.dataset.chat || '';
   log.dataset.mode = 'chat';
@@ -255,6 +256,7 @@ function noticeItem(n) {
 async function showNotices() {
   const groups = await window.sasu.notices();
   if (!groups) return;
+  const keepScroll = log.dataset.mode === 'notices' ? log.scrollTop : 0; // 보던 목록이 새로 그려져도 읽던 자리 그대로
   leaveChat('notices');
   currentReview = null;
   returnTo = 'chat';
@@ -262,10 +264,9 @@ async function showNotices() {
   setTitle('최근 7일', '지나간 알림');
   log.replaceChildren(...(groups.length ? groups.flatMap(g => [el('h2', 'nt-day', g.label), ...g.items.map(noticeItem)])
     : [el('p', 'nt-empty', '아직 지나간 알림이 없습니다. 리뷰 결과·머지 소식이 오면 여기에 모입니다.')]));
-  log.scrollTop = 0;
-  $('review-bar').hidden = false;
-  $('open-pr').hidden = true;
-  $('back').textContent = '← 대화로';
+  log.scrollTop = keepScroll;
+  $('review-bar').hidden = true;
+  $('back').hidden = false;
   $('ask').hidden = true;
   window.sasu.readNotice(null); // 목록을 봤으면 모두 읽음
   if (panel.hidden) openPanel();
@@ -282,8 +283,7 @@ async function openReview(id, from = 'chat') {
   if (!r) return;
   leaveChat('review');
   returnTo = from === 'notices' ? 'notices' : 'chat';
-  $('back').textContent = returnTo === 'notices' ? '← 알림으로' : '← 대화로';
-  $('open-pr').hidden = false;
+  $('back').hidden = false;
   currentReview = id;
   panel.classList.add('reviewing');
   setTitle(r.meta ? `리뷰 · PR #${r.meta.number}` : '리뷰', r.meta ? r.meta.title : '');
@@ -294,6 +294,24 @@ async function openReview(id, from = 'chat') {
   $('review-bar').hidden = false;
   $('ask').hidden = true;
   openPanel();
+}
+
+// 답을 기다리는 동안 알림·리뷰로 옮겨 갔으면, 답은 지금 화면이 아니라 치워 둔 대화 쪽에 붙인다
+function chatReply(cls, html) {
+  if (inChat()) {
+    log.querySelector('.msg.wait')?.remove();
+    if (cls) add(cls, html);
+    return;
+  }
+  const box = document.createElement('div');
+  box.innerHTML = log.dataset.chat || ''; // 우리가 그렸던 대화 내용
+  box.querySelector('.msg.wait')?.remove();
+  if (cls) {
+    const d = el('div', `msg ${cls}`);
+    d.innerHTML = html; // main 에서 이스케이프한 마크다운
+    box.append(d);
+  }
+  log.dataset.chat = box.innerHTML;
 }
 
 $('ask').addEventListener('submit', async e => {
@@ -307,10 +325,8 @@ $('ask').addEventListener('submit', async e => {
   const wait = add('wait', '사수가 보는 중…');
   const r = await window.sasu.chat(text, repoSel.value);
   wait.remove();
-  if (r) {
-    add(r.isError ? 'sasu err' : 'sasu', r.html);
-    if (r.left !== undefined) $('left').textContent = `오늘 남은 AI 호출 ${r.left}`;
-  }
+  chatReply(r && (r.isError ? 'sasu err' : 'sasu'), r?.html);
+  if (r?.left !== undefined) $('left').textContent = `오늘 남은 AI 호출 ${r.left}`;
   sending = false;
   $('ask').querySelector('button').disabled = false;
   input.focus();
@@ -319,7 +335,12 @@ input.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('ask').requestSubmit(); }
 });
 $('close').addEventListener('click', closePanel);
-$('back').addEventListener('click', () => (log.dataset.mode === 'review' && returnTo === 'notices' ? showNotices() : showChat()));
+// 리뷰 → (알림에서 왔으면) 알림 → 대화 순서로 한 칸씩 돌아간다
+function goBack() {
+  if (log.dataset.mode === 'review' && returnTo === 'notices') showNotices();
+  else showChat();
+}
+$('back').addEventListener('click', goBack);
 $('notices-btn').addEventListener('click', showNotices);
 $('open-pr').addEventListener('click', () => currentReview && window.sasu.openPR(currentReview));
 $('new-chat').addEventListener('click', async () => {
@@ -329,7 +350,11 @@ $('new-chat').addEventListener('click', async () => {
   showChat();
   add('sasu', '<p>새 대화입니다. 무엇이든 물어보십시오.</p>');
 });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel(); });
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if (inChat()) closePanel();
+  else goBack();
+});
 
 // ---------- 시작 ----------
 async function load() {
