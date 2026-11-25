@@ -11,22 +11,46 @@
 - **지나간 알림**: 놓친 말풍선(리뷰 결과, 머지·닫힘 소식, 오류)은 대화창의 **알림** 버튼이나 메뉴 막대 **사수 → 지나간 알림 보기**에서 날짜별로 다시 봅니다. 최근 7일, 60개까지 남고, 리뷰는 눌러서 전체를 엽니다. 리뷰·알림 화면에서는 오른쪽 위 **← 뒤로**(또는 Esc)로 한 칸씩 돌아가고, ✕는 창을 닫습니다. 방해 금지 중에 온 알림도 여기 남습니다.
 - **머지 소식**: 지켜보던 내 PR이 열린 목록에서 사라지면 `gh pr view`로 머지됐는지 닫혔는지 확인해 알려 줍니다 (AI 안 씀).
 
-## 준비
+## 처음 설치하기
 
-- 사수 플러그인 설치: `/plugin marketplace add zwo-n/ai-sasu`, `/plugin install sasu@ai-sasu`
-- `claude`(로그인된 상태), `gh`(`gh auth login`), Node 20 이상
+맥에서만 됩니다. 순서대로 한 번만 하면 됩니다.
 
-## 실행
+**1. 준비물**
+
+- [Node.js](https://nodejs.org) 20 이상
+- [Claude Code](https://claude.com/claude-code) 설치 후 로그인 (`claude`를 한 번 실행). AI 호출은 내 Claude 구독으로 나갑니다
+- [GitHub CLI](https://cli.github.com) 설치 후 `gh auth login`. 사수는 이 로그인으로 내 PR을 찾습니다. 앱이 GitHub 토큰을 따로 저장하지 않습니다
+
+**2. 사수 플러그인** (클로드 코드 안에서)
+
+```
+/plugin marketplace add zwo-n/ai-sasu
+/plugin install sasu@ai-sasu
+```
+
+**3. 앱 받아서 켜기** (터미널에서)
 
 ```bash
-cd desktop
+git clone https://github.com/zwo-n/ai-sasu.git
+cd ai-sasu/desktop
 npm install
 npm start
 ```
 
-처음 켜면 사수가 말풍선으로 "성함이 어떻게 되십니까?"라고 묻습니다. 말풍선 안 칸에 이름을 넣으면 "지원님"처럼 부르고, 건너뛰면 GitHub 계정명으로 부릅니다.
+처음 `npm start` 때 Electron 실행 파일(약 100MB)을 받느라 조금 걸립니다.
 
-메뉴 막대의 **사수**를 눌러 **저장소 추가…**로 지켜볼 저장소 폴더를 고릅니다.
+**4. 처음 켰을 때**
+
+1. 캐릭터 위 말풍선이 이름을 묻습니다. 넣으면 "○○님"으로 부르고, 건너뛰면 GitHub 계정명으로 부릅니다.
+2. 화면 위 메뉴 막대의 **사수 → 저장소 추가…**로 내 PR을 리뷰받을 저장소 폴더를 고릅니다 (`git clone` 해 둔 폴더).
+3. 맥을 켤 때마다 띄우려면 **사수 → 맥 켤 때 사수도 켜기**를 켭니다.
+
+**업데이트**: `ai-sasu` 폴더에서 `git pull` 하고 메뉴 막대 **사수 → 종료** 뒤 `npm start`로 다시 켭니다. 플러그인은 [위 설치 안내](../README.md#설치)의 업데이트 명령으로 올립니다.
+
+## 쓰는 법
+
+이미 설치했으면 `ai-sasu/desktop` 폴더에서 `npm start`로 켭니다.
+
 추가할 때 이미 열려 있던 PR은 리뷰하지 않고, 건너뛴 PR을 말풍선으로 알려 줍니다.
 리뷰받으려면 **지켜보는 저장소 → (저장소) → 리뷰할 PR 고르기**에서 하나를 고르거나, **열린 내 PR 모두 리뷰**를 누릅니다. 둘 다 그 저장소만 보고, PR 하나에 AI 호출 한 번을 씁니다.
 

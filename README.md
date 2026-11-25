@@ -24,14 +24,18 @@
 클로드 코드에서 아래를 입력합니다.
 
 ```
-/plugin marketplace add <이 저장소 경로 또는 git 주소>
+/plugin marketplace add zwo-n/ai-sasu
 /plugin install sasu@ai-sasu
 ```
 
-설치하지 않고 한 번 써 보려면:
+새 버전이 나오면 터미널에서 `claude plugin marketplace update ai-sasu` 다음에 `claude plugin update sasu@ai-sasu`를 실행합니다.
+
+맥 화면에 사수 캐릭터를 띄워 내 PR을 자동으로 리뷰받으려면 데스크톱 앱도 설치합니다 → [desktop/README.md](desktop/README.md#처음-설치하기)
+
+설치하지 않고 한 번 써 보려면 (저장소를 받은 폴더에서):
 
 ```bash
-claude --plugin-dir <이 저장소 경로>
+claude --plugin-dir .
 ```
 
 사수를 기본 대화 상대로 띄우려면:
