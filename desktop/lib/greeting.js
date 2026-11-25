@@ -6,7 +6,7 @@ function callName(me) {
 
 // askName: 아직 이름을 묻지 않았다 (처음 켬)
 function greeting({ me, hasRepos, askName = false }) {
-  if (askName) return '안녕하십니까, 사수입니다. 처음 뵙겠습니다. 어떻게 불러 드리면 되겠습니까?';
+  if (askName) return '처음 뵙겠습니다. 사수입니다. 성함이 어떻게 되십니까?';
   if (!hasRepos) return '안녕하십니까, 사수입니다. 메뉴 막대의 사수 → 저장소 추가…로 지켜볼 저장소를 알려 주십시오.';
   const name = callName(me);
   const whose = name ? `${name}님의 PR이 올라오면` : 'PR을 올리시면';
@@ -16,7 +16,7 @@ function greeting({ me, hasRepos, askName = false }) {
 // 이름을 받은 뒤 사수의 답. typed: 직접 입력했나 (아니면 건너뜀 → GitHub 계정명)
 const CHANGE = '바꾸고 싶으시면 메뉴 막대의 사수 → 부를 이름 바꾸기…를 누르십시오.';
 function nameReply(name, typed) {
-  if (typed && name) return `${name}님, 잘 부탁드립니다. 코드 얘기면 뭐든 물어보십시오.`;
+  if (typed && name) return `${name}님, 앞으로 잘 부탁드립니다. 궁금한 점 있으면 편하게 물어보십시오.`;
   if (name) return `알겠습니다. GitHub 계정 이름대로 ${name}님이라고 부르겠습니다. ${CHANGE}`;
   return `알겠습니다. 이름 없이 말씀드리겠습니다. ${CHANGE}`;
 }

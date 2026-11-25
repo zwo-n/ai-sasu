@@ -94,6 +94,7 @@ function fill(target, { text, reviewId, card, noticeId }) {
   target.dataset.notice = noticeId || '';
 }
 function showBubble(msg) {
+  if (asking) return; // 이름을 묻는 중에는 덮지 않는다 (지나간 알림에는 남는다)
   fill(bubbleEl, msg);
   bubbleLive = true;
   if (panel.hidden) bubbleEl.hidden = false;
@@ -108,6 +109,7 @@ function hideBubble() {
   if (['warn', 'happy'].includes(buddy.dataset.mood)) setMood('idle');
 }
 function clickBubble(e) {
+  if (e.currentTarget === bubbleEl && asking) return; // 이름 칸을 누른 것
   const id = e.currentTarget.dataset.review;
   if (e.currentTarget.dataset.notice) window.sasu.readNotice(e.currentTarget.dataset.notice);
   hideBubble();
@@ -134,7 +136,7 @@ function openPanel() {
 function closePanel() {
   panel.hidden = true;
   notice.hidden = true;
-  if (bubbleLive) bubbleEl.hidden = false; // 아직 볼 때가 남은 말풍선은 다시 보여 준다
+  if (bubbleLive || asking) bubbleEl.hidden = false; // 아직 볼 때가 남은 말풍선·이름 묻기는 다시 보여 준다
 }
 function togglePanel() { panel.hidden ? openPanel() : closePanel(); }
 
@@ -353,11 +355,11 @@ async function load() {
   if (onlyGreeting && !log.querySelector('.greet .name-form')) {
     log.innerHTML = '';
     const g = addSasuText('sasu greet', info.greeting);
-    if (info.askName) nameForm(g);
+    if (info.askName) g.append(nameForm(reply => addSasuText('sasu', reply))); // 대화창을 먼저 열었을 때
   }
-  if (info.askName && !firstHello && panel.hidden) { // 처음 켰을 때 한 번: 눌러서 이름을 알려 달라고
-    firstHello = true;
-    showBubble({ text: '처음 뵙겠습니다, 사수입니다. 저를 눌러 어떻게 불러 드릴지 알려 주십시오.' });
+  if (info.askName && !askedOnce) { // 처음 켰을 때: 대화창 없이 말풍선에서 바로 묻는다
+    askedOnce = true;
+    askInBubble('처음 뵙겠습니다. 사수입니다.\n성함이 어떻게 되십니까?');
   }
 }
 
@@ -370,40 +372,64 @@ function addSasuText(cls, text) {
   return d;
 }
 
-// 이름 묻기: 입력하면 그 이름, 건너뛰면(빈 칸) GitHub 계정명으로 부른다
-let firstHello = false;
-function nameForm(msg) {
+// 이름 묻기 칸: 입력하면 그 이름, 건너뛰면(빈 칸) GitHub 계정명으로 부른다. 사수의 답은 onReply 로
+let askedOnce = false;
+let asking = false; // 말풍선에서 이름을 묻는 중
+function nameForm(onReply) {
   const form = el('form', 'name-form');
   const box = el('input', '');
   box.maxLength = 20;
   box.placeholder = '예: 지원';
-  const ok = el('button', 'primary', '저장');
+  const ok = el('button', 'primary', '확인');
   ok.type = 'submit';
-  const skip = el('button', '', '건너뛰기');
+  const skip = el('button', 'skip', '건너뛰기');
   skip.type = 'button';
   form.append(box, ok, skip);
   const done = async name => {
     form.remove();
     const r = await window.sasu.setName(name);
     if (!r) return;
+    endAsking();
     await load();
-    addSasuText('sasu', r.reply);
+    onReply(r.reply);
   };
   form.addEventListener('submit', e => { e.preventDefault(); done(box.value.trim()); });
   skip.addEventListener('click', () => done(''));
-  msg.append(form);
-  setTimeout(() => box.focus(), 80);
+  // 캐릭터 창은 평소 포커스를 받지 않으니, 칸을 누르면 창부터 깨운다
+  box.addEventListener('pointerdown', () => { window.sasu.focus(); setTimeout(() => box.focus(), 30); });
+  setTimeout(() => box.isConnected && !box.closest('[hidden]') && box.focus(), 80);
+  return form;
+}
+
+function askInBubble(text) {
+  asking = true;
+  bubbleLive = false;
+  clearTimeout(bubbleTimer);
+  bubbleEl.classList.remove('card', 'has-review');
+  bubbleEl.classList.add('asking');
+  bubbleEl.dataset.review = '';
+  bubbleEl.dataset.notice = '';
+  bubbleEl.replaceChildren(el('div', 'ask-text', text), nameForm(reply => showBubble({ text: reply })));
+  if (panel.hidden) { bubbleEl.hidden = false; window.sasu.focus(); }
+}
+
+function endAsking() {
+  log.querySelectorAll('.name-form').forEach(f => f.remove());
+  if (!asking) return;
+  asking = false;
+  bubbleEl.classList.remove('asking');
+  bubbleEl.hidden = true;
 }
 
 window.sasu.on('mood', setMood);
 window.sasu.on('bubble', showBubble);
 window.sasu.on('open-review', id => openReview(id));
 window.sasu.on('open-notices', showNotices);
-window.sasu.on('ask-name', () => { // 메뉴 '부를 이름 바꾸기…'
+window.sasu.on('ask-name', () => { // 메뉴 '부를 이름 바꾸기…': 대화창이 닫혀 있으면 말풍선에서, 열려 있으면 대화창에서
+  endAsking();
+  if (panel.hidden) { askInBubble('어떻게 불러 드리면 되겠습니까?'); return; }
   if (!inChat()) showChat();
-  log.querySelectorAll('.name-form').forEach(f => f.remove());
-  openPanel();
-  nameForm(addSasuText('sasu', '어떻게 불러 드리면 되겠습니까?'));
+  addSasuText('sasu', '어떻게 불러 드리면 되겠습니까?').append(nameForm(reply => addSasuText('sasu', reply)));
 });
 window.sasu.on('notices', n => {
   setBadge(n);
