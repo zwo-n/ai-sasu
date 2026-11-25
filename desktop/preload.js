@@ -7,12 +7,14 @@ contextBridge.exposeInMainWorld('sasu', {
   resetChat: repo => ipcRenderer.invoke('chat:reset', repo),
   review: id => ipcRenderer.invoke('review:get', id),
   openPR: id => ipcRenderer.send('review:open-pr', id),
+  notices: () => ipcRenderer.invoke('notices:get'),
+  readNotice: id => ipcRenderer.send('notices:read', id || null),
   interactive: on => ipcRenderer.send('ui:interactive', on),
   drag: (dx, dy) => ipcRenderer.send('ui:drag', { dx, dy }),
   dragEnd: () => ipcRenderer.send('ui:drag-end'),
   focus: () => ipcRenderer.send('ui:focus'),
   on: (channel, fn) => {
-    const allowed = ['mood', 'bubble', 'open-review', 'dnd', 'reload'];
+    const allowed = ['mood', 'bubble', 'open-review', 'open-notices', 'notices', 'dnd', 'reload'];
     if (allowed.includes(channel)) ipcRenderer.on(channel, (_e, data) => fn(data));
   },
 });

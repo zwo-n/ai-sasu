@@ -10,6 +10,7 @@ const repoSel = $('repo');
 let info = { repos: [], reviews: [] };
 let bubbleTimer;
 let currentReview = null;
+let returnTo = 'chat'; // 리뷰에서 '←' 를 누르면 돌아갈 곳: 대화 또는 지나간 알림
 let sending = false;
 
 // ---------- 클릭 통과: 캐릭터·말풍선·대화창 위에서만 마우스를 받는다 ----------
@@ -84,12 +85,13 @@ function reviewCard(c) {
 // 말풍선 내용. 대화창이 열려 있으면 말풍선 자리가 가려지니, 같은 내용을 대화창 위쪽 알림(#notice)에도 띄운다.
 const notice = $('notice');
 let bubbleLive = false; // 아직 사라질 시간이 안 된 말풍선이 있나
-function fill(target, { text, reviewId, card }) {
+function fill(target, { text, reviewId, card, noticeId }) {
   if (card) target.replaceChildren(...reviewCard(card));
   else target.textContent = text;
   target.classList.toggle('card', Boolean(card));
   target.classList.toggle('has-review', Boolean(reviewId));
   target.dataset.review = reviewId || '';
+  target.dataset.notice = noticeId || '';
 }
 function showBubble(msg) {
   fill(bubbleEl, msg);
@@ -107,6 +109,7 @@ function hideBubble() {
 }
 function clickBubble(e) {
   const id = e.currentTarget.dataset.review;
+  if (e.currentTarget.dataset.notice) window.sasu.readNotice(e.currentTarget.dataset.notice);
   hideBubble();
   if (id) openReview(id);
   else openPanel();
@@ -120,6 +123,7 @@ function openPanel() {
     notice.replaceChildren(...[...bubbleEl.childNodes].map(n => n.cloneNode(true)));
     notice.className = bubbleEl.className;
     notice.dataset.review = bubbleEl.dataset.review;
+    notice.dataset.notice = bubbleEl.dataset.notice;
     notice.hidden = false;
   }
   panel.hidden = false;
@@ -211,22 +215,73 @@ function setTitle(small, main) {
   t.append(el('span', 'pt-main', main));
 }
 
+// 대화 내용은 리뷰·알림을 보는 동안 잠깐 치워 두었다가 돌아오면 되살린다
+const inChat = () => (log.dataset.mode || 'chat') === 'chat';
+function leaveChat(mode) {
+  if (inChat()) log.dataset.chat = log.innerHTML;
+  log.dataset.mode = mode;
+}
+
 function showChat() {
   currentReview = null;
+  returnTo = 'chat';
   panel.classList.remove('reviewing');
   setTitle(null, '사수와 대화');
   $('review-bar').hidden = true;
   $('ask').hidden = false;
-  if (log.dataset.mode === 'review') { log.innerHTML = log.dataset.chat || ''; }
+  if (!inChat()) log.innerHTML = log.dataset.chat || '';
   log.dataset.mode = 'chat';
   log.scrollTop = log.scrollHeight;
 }
 
-async function openReview(id) {
+// ---------- 지나간 알림: 날짜별, 리뷰는 눌러서 다시 열기 ----------
+function noticeItem(n) {
+  const item = el('div', `nt-item${n.reviewId ? ' has-review' : ''}${n.read ? '' : ' unread'}`);
+  const time = new Date(n.at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+  if (n.card) {
+    const c = n.card;
+    const head = el('div', 'b-head');
+    head.append(el('span', 'b-where', `${time} · ${c.where}`), el('span', `chip tone-${c.tone}`, c.verdict));
+    item.append(head, el('div', 'b-title', c.title), el('div', 'nt-line', c.stats.map(st => `${st.label} ${st.n}`).join(' · ')));
+  } else {
+    item.append(el('div', 'b-where', time), el('div', 'nt-text', n.text));
+  }
+  if (n.reviewId) item.addEventListener('click', () => openReview(n.reviewId, 'notices'));
+  return item;
+}
+
+async function showNotices() {
+  const groups = await window.sasu.notices();
+  if (!groups) return;
+  leaveChat('notices');
+  currentReview = null;
+  returnTo = 'chat';
+  panel.classList.add('reviewing');
+  setTitle('최근 7일', '지나간 알림');
+  log.replaceChildren(...(groups.length ? groups.flatMap(g => [el('h2', 'nt-day', g.label), ...g.items.map(noticeItem)])
+    : [el('p', 'nt-empty', '아직 지나간 알림이 없어요. 리뷰 결과·머지 소식이 오면 여기에 모여요.')]));
+  log.scrollTop = 0;
+  $('review-bar').hidden = false;
+  $('open-pr').hidden = true;
+  $('back').textContent = '← 대화로';
+  $('ask').hidden = true;
+  window.sasu.readNotice(null); // 목록을 봤으면 모두 읽음
+  if (panel.hidden) openPanel();
+}
+
+function setBadge(n) {
+  const b = $('badge');
+  b.textContent = n > 9 ? '9+' : String(n || 0);
+  b.hidden = !n;
+}
+
+async function openReview(id, from = 'chat') {
   const r = await window.sasu.review(id);
   if (!r) return;
-  if (log.dataset.mode !== 'review') log.dataset.chat = log.innerHTML;
-  log.dataset.mode = 'review';
+  leaveChat('review');
+  returnTo = from === 'notices' ? 'notices' : 'chat';
+  $('back').textContent = returnTo === 'notices' ? '← 알림으로' : '← 대화로';
+  $('open-pr').hidden = false;
   currentReview = id;
   panel.classList.add('reviewing');
   setTitle(r.meta ? `리뷰 · PR #${r.meta.number}` : '리뷰', r.meta ? r.meta.title : '');
@@ -262,7 +317,8 @@ input.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('ask').requestSubmit(); }
 });
 $('close').addEventListener('click', closePanel);
-$('back').addEventListener('click', showChat);
+$('back').addEventListener('click', () => (log.dataset.mode === 'review' && returnTo === 'notices' ? showNotices() : showChat()));
+$('notices-btn').addEventListener('click', showNotices);
 $('open-pr').addEventListener('click', () => currentReview && window.sasu.openPR(currentReview));
 $('new-chat').addEventListener('click', async () => {
   await window.sasu.resetChat(repoSel.value);
@@ -291,17 +347,26 @@ async function load() {
   custom.hidden = !info.character;
   $('sasu').style.display = info.character ? 'none' : '';
   setMood(info.dnd ? 'sleep' : 'idle');
+  setBadge(info.unread);
   // 첫 인사는 대화가 아직 없을 때만, 지금 저장소 상태에 맞게 다시 쓴다
-  const onlyGreeting = log.dataset.mode !== 'review' && [...log.children].every(c => c.classList.contains('greet'));
+  const onlyGreeting = inChat() && [...log.children].every(c => c.classList.contains('greet'));
   if (onlyGreeting) {
     log.innerHTML = '';
-    add('sasu greet', info.greeting, true); // 이름이 들어가니 글자로만 넣는다
+    const span = add('sasu greet', info.greeting, true).firstChild; // 이름이 들어가니 글자로만 넣는다
+    const key = '사수 → 저장소 추가…'; // 눌러야 할 메뉴는 굵게
+    const at = info.greeting.indexOf(key);
+    if (at >= 0) span.replaceChildren(info.greeting.slice(0, at), el('b', '', key), info.greeting.slice(at + key.length));
   }
 }
 
 window.sasu.on('mood', setMood);
 window.sasu.on('bubble', showBubble);
-window.sasu.on('open-review', openReview);
+window.sasu.on('open-review', id => openReview(id));
+window.sasu.on('open-notices', showNotices);
+window.sasu.on('notices', n => {
+  setBadge(n);
+  if (n && log.dataset.mode === 'notices') showNotices(); // 보고 있는 목록에 새 알림을 바로 넣는다
+});
 window.sasu.on('dnd', on => setMood(on ? 'sleep' : 'idle'));
 window.sasu.on('reload', load);
 load();

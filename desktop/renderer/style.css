@@ -94,7 +94,7 @@ html, body { margin: 0; height: 100%; background: transparent; overflow: hidden;
 #panel { position: absolute; right: 8px; bottom: 146px; width: 364px; height: 400px; display: flex; flex-direction: column;
   background: var(--paper); border: 2px solid var(--ink); border-radius: 16px; box-shadow: 0 8px 28px rgba(0,0,0,.25);
   user-select: text; overflow: hidden; }
-#panel[hidden], #bubble[hidden], #notice[hidden], #review-bar[hidden], #custom[hidden], #ask[hidden] { display: none; }
+#panel[hidden], #bubble[hidden], #notice[hidden], #review-bar[hidden], #custom[hidden], #ask[hidden], #badge[hidden] { display: none; }
 #panel header { display: flex; gap: 6px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--line); }
 #panel header strong { flex: 1; min-width: 0; font-size: 13px; display: flex; flex-direction: column; }
 .pt-small { font-size: 11px; font-weight: 600; color: var(--muted); }
@@ -131,7 +131,7 @@ footer#left { padding: 0 12px 6px; font-size: 11px; color: var(--muted); }
 
 /* 리뷰 보기: 캐릭터 위까지 덮어 넓게 읽는다 */
 #panel.reviewing { bottom: 8px; height: calc(100% - 16px); z-index: 5; } /* 캐릭터 위로 덮는다. 닫으면 다시 보인다 */
-#panel.reviewing #repo, #panel.reviewing #new-chat { display: none; }
+#panel.reviewing #repo, #panel.reviewing #new-chat, #panel.reviewing #notices-btn { display: none; }
 #panel.reviewing #log { padding: 12px 14px 16px; font-size: 13.5px; line-height: 1.65; word-break: keep-all; overflow-wrap: anywhere; user-select: text; }
 .rv-summary { padding: 10px 12px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line); margin-bottom: 12px; }
 .rv-summary .b-head { margin-bottom: 8px; }
@@ -156,3 +156,18 @@ footer#left { padding: 0 12px 6px; font-size: 11px; color: var(--muted); }
 .finding h3 .where code { font-size: 11px; }
 #log .finding li { padding-left: 2px; }
 .finding .lbl { font-weight: 700; color: var(--muted); margin-right: 4px; }
+
+/* 지나간 알림 */
+#panel select { max-width: 120px; }
+#badge { display: inline-block; min-width: 16px; margin-left: 4px; padding: 0 4px; border-radius: 999px;
+  background: var(--warn); color: #fff; font-size: 10.5px; font-weight: 700; line-height: 16px; text-align: center; }
+#log h2.nt-day { font-size: 12px; color: var(--muted); margin: 12px 2px 6px; }
+#log h2.nt-day:first-child { margin-top: 0; }
+.nt-item { padding: 9px 12px; margin: 0 0 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); }
+.nt-item.unread { border-left: 4px solid var(--accent); }
+.nt-item.has-review { cursor: pointer; }
+.nt-item.has-review:hover { border-color: var(--accent); }
+.nt-item .b-title { margin-bottom: 2px; }
+.nt-line { font-size: 12px; color: var(--muted); }
+.nt-text { white-space: pre-line; }
+.nt-empty { color: var(--muted); }
