@@ -26,8 +26,10 @@ const CONFIG_FILE = path.join(DATA, 'config.json');
 const MY_CHAR_DIR = path.join(DATA, 'character'); // 메뉴에서 고른 내 캐릭터 그림을 복사해 두는 곳
 const STATE_FILE = path.join(DATA, 'state.json');
 const REVIEW_DIR = path.join(DATA, 'reviews');
-const W = 380;
-const H = 560;
+// 창 = 대화창 + 둘레(좌우 8px씩, 아래 캐릭터 자리 146px + 위 14px). 대화창 크기는 끌어서 바꾼다.
+const PANEL = { w: 364, h: 400, minW: 300, minH: 260, maxW: 900 };
+const EDGE_W = 16;
+const EDGE_H = 160;
 const MOODS = ['idle', 'thinking', 'warn', 'happy', 'sleep'];
 
 let config;
@@ -90,8 +92,18 @@ function bubble(text, reviewId = null, card = null, { keep = true } = {}) {
 }
 
 // ---------- 창 ----------
+// 원하는 대화창 크기를 그 모니터(area)에 맞게 줄인 창 크기
+function windowSize(p, area) {
+  const clamp = (v, lo, hi) => Math.round(Math.min(Math.max(Number(v) || lo, lo), hi));
+  const w = clamp(p?.w ?? PANEL.w, PANEL.minW, Math.min(PANEL.maxW, area.width - EDGE_W - 24));
+  const h = clamp(p?.h ?? PANEL.h, PANEL.minH, area.height - EDGE_H);
+  return { width: w + EDGE_W, height: h + EDGE_H };
+}
+
 function createWindow() {
-  const area = screen.getPrimaryDisplay().workArea;
+  // 지난번 자리가 있으면 그 자리의 모니터 기준, 없으면 주 모니터 오른쪽 아래
+  const area = (state.position ? screen.getDisplayNearestPoint(state.position) : screen.getPrimaryDisplay()).workArea;
+  const { width: W, height: H } = windowSize(state.panelSize, area);
   const pos = state.position || { x: area.x + area.width - W - 12, y: area.y + area.height - H };
   win = new BrowserWindow({
     width: W, height: H, x: pos.x, y: pos.y,
@@ -112,6 +124,7 @@ function resetPosition() {
   delete state.position;
   saveState();
   const area = screen.getPrimaryDisplay().workArea;
+  const [W, H] = win.getSize();
   win.setPosition(area.x + area.width - W - 12, area.y + area.height - H);
 }
 
@@ -185,9 +198,20 @@ async function pickCharacter() {
   try { await replaceCharacter(); } finally { picking = false; buildTray(); }
 }
 
+// 파일 고르는 창을 맨 앞에. 메뉴 막대 앱이라 먼저 앞으로 나오고, 늘 위에 떠 있는 사수 창은 잠깐 내린다.
+async function openDialog(opts) {
+  app.focus({ steal: true });
+  win?.setAlwaysOnTop(false);
+  try {
+    return await dialog.showOpenDialog(opts);
+  } finally {
+    win?.setAlwaysOnTop(true, 'floating');
+  }
+}
+
 // 그림을 골라 표정별로 나눠 내 캐릭터 폴더에 복사한다. 원본을 옮기거나 지워도 그대로 보이게.
 async function replaceCharacter() {
-  const r = await dialog.showOpenDialog({
+  const r = await openDialog({
     title: '캐릭터 그림 고르기',
     message: '한 장이면 모든 표정에 씁니다. 여러 장이면 파일 이름(idle·thinking·warn·happy·sleep 또는 기본·생각·놀람·신남·졸림)으로 나눕니다.',
     properties: ['openFile', 'multiSelections'],
@@ -376,6 +400,29 @@ on('ui:drag-end', () => {
 });
 on('ui:focus', () => win.focus());
 
+// 대화창 크기: 오른쪽 아래(캐릭터 자리)는 그대로 두고 왼쪽·위로 늘리고 줄인다
+// 창이 지금 있는 모니터 기준으로 자르고, 늘려도 그 모니터 왼쪽·위 밖으로 나가지 않게 한다.
+function resizePanel(p) {
+  const b = win.getBounds();
+  const area = screen.getDisplayMatching(b).workArea;
+  const { width, height } = windowSize(p, area);
+  win.setBounds({ x: Math.max(area.x, b.x + b.width - width), y: Math.max(area.y, b.y + b.height - height), width, height });
+}
+on('ui:resize', p => resizePanel({ w: p?.w, h: p?.h }));
+on('ui:resize-end', () => {
+  const b = win.getBounds();
+  state.panelSize = { w: b.width - EDGE_W, h: b.height - EDGE_H };
+  state.position = { x: b.x, y: b.y };
+  saveState();
+});
+on('ui:resize-reset', () => {
+  delete state.panelSize;
+  resizePanel(null);
+  const [x, y] = win.getPosition();
+  state.position = { x, y };
+  saveState();
+});
+
 // 인사말에 쓸 GitHub 계정명. 한 번 알아내면 state 에 둔다 (gh 만 씀, AI 아님)
 function loadGhLogin() {
   execFile(config.ghPath || 'gh', ['api', 'user', '--jq', '.login'], { env, timeout: 15000 }, (err, stdout) => {
@@ -482,7 +529,7 @@ function setAutoStart(on) {
 
 // ---------- 트레이 메뉴 ----------
 async function addRepo() {
-  const r = await dialog.showOpenDialog({ title: '지켜볼 저장소 폴더', properties: ['openDirectory'] });
+  const r = await openDialog({ title: '지켜볼 저장소 폴더', properties: ['openDirectory'] });
   if (r.canceled || !r.filePaths[0]) return;
   const repo = r.filePaths[0];
   if (!fs.existsSync(path.join(repo, '.git'))) {

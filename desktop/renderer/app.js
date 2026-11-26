@@ -56,6 +56,25 @@ buddy.addEventListener('pointerup', () => {
   dragging = false;
 });
 
+// ---------- 대화창 크기: 왼쪽 위 손잡이를 끌면 왼쪽·위로 늘고 준다 ----------
+const grip = $('grip');
+let sizing = null;
+grip.addEventListener('pointerdown', e => {
+  sizing = { x: e.screenX, y: e.screenY, w: panel.offsetWidth, h: panel.offsetHeight };
+  dragging = true; // 끄는 동안 창 밖으로 나가도 마우스를 놓치지 않게
+  grip.setPointerCapture(e.pointerId);
+  e.preventDefault();
+});
+grip.addEventListener('pointermove', e => {
+  if (sizing) window.sasu.resize(sizing.w - (e.screenX - sizing.x), sizing.h - (e.screenY - sizing.y));
+});
+grip.addEventListener('pointerup', () => {
+  if (sizing) window.sasu.resizeEnd();
+  sizing = null;
+  dragging = false;
+});
+grip.addEventListener('dblclick', () => window.sasu.resizeReset());
+
 // ---------- 말풍선 ----------
 // 리뷰 결과는 카드로: 어디 · 제목 · 판정 칩과 개수 · 먼저 볼 것. 모두 textContent 로 넣는다.
 function el(tag, cls, text) {
@@ -120,6 +139,8 @@ bubbleEl.addEventListener('click', clickBubble);
 notice.addEventListener('click', clickBubble);
 
 // ---------- 대화창 ----------
+const setLeft = n => { $('left').textContent = `오늘 남은 AI 호출 ${n}`; };
+
 function openPanel() {
   if (bubbleLive && !bubbleEl.hidden) { // 떠 있던 말풍선은 대화창 위쪽 알림으로 옮긴다
     notice.replaceChildren(...[...bubbleEl.childNodes].map(n => n.cloneNode(true)));
@@ -130,6 +151,7 @@ function openPanel() {
   }
   panel.hidden = false;
   bubbleEl.hidden = true;
+  window.sasu.info().then(i => setLeft(i.left)); // 자동 리뷰로 쓴 것·날짜 바뀜까지 열 때마다 다시 센다
   window.sasu.focus();
   setTimeout(() => (log.querySelector('.name-form input') || input).focus(), 50); // 이름을 묻는 중이면 그 칸부터
 }
@@ -326,7 +348,7 @@ $('ask').addEventListener('submit', async e => {
   const r = await window.sasu.chat(text, repoSel.value);
   wait.remove();
   chatReply(r && (r.isError ? 'sasu err' : 'sasu'), r?.html);
-  if (r?.left !== undefined) $('left').textContent = `오늘 남은 AI 호출 ${r.left}`;
+  if (r?.left !== undefined) setLeft(r.left);
   sending = false;
   $('ask').querySelector('button').disabled = false;
   input.focus();
@@ -369,7 +391,7 @@ async function load() {
   }
   if (info.repos.some(r => r.path === picked)) repoSel.value = picked;
   repoSel.hidden = info.repos.length === 0;
-  $('left').textContent = `오늘 남은 AI 호출 ${info.left}`;
+  setLeft(info.left);
   const custom = $('custom');
   custom.hidden = !info.character;
   $('sasu').style.display = info.character ? 'none' : '';
