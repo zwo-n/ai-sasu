@@ -92,9 +92,8 @@ function bubble(text, reviewId = null, card = null, { keep = true } = {}) {
 }
 
 // ---------- 창 ----------
-// 원하는 대화창 크기를 화면에 맞게 줄인 창 크기
-function windowSize(p = state.panelSize) {
-  const area = screen.getPrimaryDisplay().workArea;
+// 원하는 대화창 크기를 그 모니터(area)에 맞게 줄인 창 크기
+function windowSize(p, area) {
   const clamp = (v, lo, hi) => Math.round(Math.min(Math.max(Number(v) || lo, lo), hi));
   const w = clamp(p?.w ?? PANEL.w, PANEL.minW, Math.min(PANEL.maxW, area.width - EDGE_W - 24));
   const h = clamp(p?.h ?? PANEL.h, PANEL.minH, area.height - EDGE_H);
@@ -102,8 +101,9 @@ function windowSize(p = state.panelSize) {
 }
 
 function createWindow() {
-  const area = screen.getPrimaryDisplay().workArea;
-  const { width: W, height: H } = windowSize();
+  // 지난번 자리가 있으면 그 자리의 모니터 기준, 없으면 주 모니터 오른쪽 아래
+  const area = (state.position ? screen.getDisplayNearestPoint(state.position) : screen.getPrimaryDisplay()).workArea;
+  const { width: W, height: H } = windowSize(state.panelSize, area);
   const pos = state.position || { x: area.x + area.width - W - 12, y: area.y + area.height - H };
   win = new BrowserWindow({
     width: W, height: H, x: pos.x, y: pos.y,
@@ -401,10 +401,12 @@ on('ui:drag-end', () => {
 on('ui:focus', () => win.focus());
 
 // 대화창 크기: 오른쪽 아래(캐릭터 자리)는 그대로 두고 왼쪽·위로 늘리고 줄인다
+// 창이 지금 있는 모니터 기준으로 자르고, 늘려도 그 모니터 왼쪽·위 밖으로 나가지 않게 한다.
 function resizePanel(p) {
-  const { width, height } = windowSize(p);
   const b = win.getBounds();
-  win.setBounds({ x: b.x + b.width - width, y: b.y + b.height - height, width, height });
+  const area = screen.getDisplayMatching(b).workArea;
+  const { width, height } = windowSize(p, area);
+  win.setBounds({ x: Math.max(area.x, b.x + b.width - width), y: Math.max(area.y, b.y + b.height - height), width, height });
 }
 on('ui:resize', p => resizePanel({ w: p?.w, h: p?.h }));
 on('ui:resize-end', () => {
