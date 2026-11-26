@@ -26,8 +26,10 @@ const CONFIG_FILE = path.join(DATA, 'config.json');
 const MY_CHAR_DIR = path.join(DATA, 'character'); // 메뉴에서 고른 내 캐릭터 그림을 복사해 두는 곳
 const STATE_FILE = path.join(DATA, 'state.json');
 const REVIEW_DIR = path.join(DATA, 'reviews');
-const W = 380;
-const H = 560;
+// 창 = 대화창 + 둘레(좌우 8px씩, 아래 캐릭터 자리 146px + 위 14px). 대화창 크기는 끌어서 바꾼다.
+const PANEL = { w: 364, h: 400, minW: 300, minH: 260, maxW: 900 };
+const EDGE_W = 16;
+const EDGE_H = 160;
 const MOODS = ['idle', 'thinking', 'warn', 'happy', 'sleep'];
 
 let config;
@@ -90,8 +92,18 @@ function bubble(text, reviewId = null, card = null, { keep = true } = {}) {
 }
 
 // ---------- 창 ----------
+// 원하는 대화창 크기를 화면에 맞게 줄인 창 크기
+function windowSize(p = state.panelSize) {
+  const area = screen.getPrimaryDisplay().workArea;
+  const clamp = (v, lo, hi) => Math.round(Math.min(Math.max(Number(v) || lo, lo), hi));
+  const w = clamp(p?.w ?? PANEL.w, PANEL.minW, Math.min(PANEL.maxW, area.width - EDGE_W - 24));
+  const h = clamp(p?.h ?? PANEL.h, PANEL.minH, area.height - EDGE_H);
+  return { width: w + EDGE_W, height: h + EDGE_H };
+}
+
 function createWindow() {
   const area = screen.getPrimaryDisplay().workArea;
+  const { width: W, height: H } = windowSize();
   const pos = state.position || { x: area.x + area.width - W - 12, y: area.y + area.height - H };
   win = new BrowserWindow({
     width: W, height: H, x: pos.x, y: pos.y,
@@ -112,6 +124,7 @@ function resetPosition() {
   delete state.position;
   saveState();
   const area = screen.getPrimaryDisplay().workArea;
+  const [W, H] = win.getSize();
   win.setPosition(area.x + area.width - W - 12, area.y + area.height - H);
 }
 
@@ -375,6 +388,27 @@ on('ui:drag-end', () => {
   saveState();
 });
 on('ui:focus', () => win.focus());
+
+// 대화창 크기: 오른쪽 아래(캐릭터 자리)는 그대로 두고 왼쪽·위로 늘리고 줄인다
+function resizePanel(p) {
+  const { width, height } = windowSize(p);
+  const b = win.getBounds();
+  win.setBounds({ x: b.x + b.width - width, y: b.y + b.height - height, width, height });
+}
+on('ui:resize', p => resizePanel({ w: p?.w, h: p?.h }));
+on('ui:resize-end', () => {
+  const b = win.getBounds();
+  state.panelSize = { w: b.width - EDGE_W, h: b.height - EDGE_H };
+  state.position = { x: b.x, y: b.y };
+  saveState();
+});
+on('ui:resize-reset', () => {
+  delete state.panelSize;
+  resizePanel(null);
+  const [x, y] = win.getPosition();
+  state.position = { x, y };
+  saveState();
+});
 
 // 인사말에 쓸 GitHub 계정명. 한 번 알아내면 state 에 둔다 (gh 만 씀, AI 아님)
 function loadGhLogin() {

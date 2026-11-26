@@ -14,6 +14,9 @@ contextBridge.exposeInMainWorld('sasu', {
   drag: (dx, dy) => ipcRenderer.send('ui:drag', { dx, dy }),
   dragEnd: () => ipcRenderer.send('ui:drag-end'),
   focus: () => ipcRenderer.send('ui:focus'),
+  resize: (w, h) => ipcRenderer.send('ui:resize', { w, h }),
+  resizeEnd: () => ipcRenderer.send('ui:resize-end'),
+  resizeReset: () => ipcRenderer.send('ui:resize-reset'),
   on: (channel, fn) => {
     const allowed = ['mood', 'bubble', 'open-review', 'open-notices', 'notices', 'ask-name', 'dnd', 'reload'];
     if (allowed.includes(channel)) ipcRenderer.on(channel, (_e, data) => fn(data));

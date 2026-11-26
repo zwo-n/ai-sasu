@@ -56,6 +56,25 @@ buddy.addEventListener('pointerup', () => {
   dragging = false;
 });
 
+// ---------- 대화창 크기: 왼쪽 위 손잡이를 끌면 왼쪽·위로 늘고 준다 ----------
+const grip = $('grip');
+let sizing = null;
+grip.addEventListener('pointerdown', e => {
+  sizing = { x: e.screenX, y: e.screenY, w: panel.offsetWidth, h: panel.offsetHeight };
+  dragging = true; // 끄는 동안 창 밖으로 나가도 마우스를 놓치지 않게
+  grip.setPointerCapture(e.pointerId);
+  e.preventDefault();
+});
+grip.addEventListener('pointermove', e => {
+  if (sizing) window.sasu.resize(sizing.w - (e.screenX - sizing.x), sizing.h - (e.screenY - sizing.y));
+});
+grip.addEventListener('pointerup', () => {
+  if (sizing) window.sasu.resizeEnd();
+  sizing = null;
+  dragging = false;
+});
+grip.addEventListener('dblclick', () => window.sasu.resizeReset());
+
 // ---------- 말풍선 ----------
 // 리뷰 결과는 카드로: 어디 · 제목 · 판정 칩과 개수 · 먼저 볼 것. 모두 textContent 로 넣는다.
 function el(tag, cls, text) {
