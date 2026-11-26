@@ -120,6 +120,8 @@ bubbleEl.addEventListener('click', clickBubble);
 notice.addEventListener('click', clickBubble);
 
 // ---------- 대화창 ----------
+const setLeft = n => { $('left').textContent = `오늘 남은 AI 호출 ${n}`; };
+
 function openPanel() {
   if (bubbleLive && !bubbleEl.hidden) { // 떠 있던 말풍선은 대화창 위쪽 알림으로 옮긴다
     notice.replaceChildren(...[...bubbleEl.childNodes].map(n => n.cloneNode(true)));
@@ -130,6 +132,7 @@ function openPanel() {
   }
   panel.hidden = false;
   bubbleEl.hidden = true;
+  window.sasu.info().then(i => setLeft(i.left)); // 자동 리뷰로 쓴 것·날짜 바뀜까지 열 때마다 다시 센다
   window.sasu.focus();
   setTimeout(() => (log.querySelector('.name-form input') || input).focus(), 50); // 이름을 묻는 중이면 그 칸부터
 }
@@ -326,7 +329,7 @@ $('ask').addEventListener('submit', async e => {
   const r = await window.sasu.chat(text, repoSel.value);
   wait.remove();
   chatReply(r && (r.isError ? 'sasu err' : 'sasu'), r?.html);
-  if (r?.left !== undefined) $('left').textContent = `오늘 남은 AI 호출 ${r.left}`;
+  if (r?.left !== undefined) setLeft(r.left);
   sending = false;
   $('ask').querySelector('button').disabled = false;
   input.focus();
@@ -369,7 +372,7 @@ async function load() {
   }
   if (info.repos.some(r => r.path === picked)) repoSel.value = picked;
   repoSel.hidden = info.repos.length === 0;
-  $('left').textContent = `오늘 남은 AI 호출 ${info.left}`;
+  setLeft(info.left);
   const custom = $('custom');
   custom.hidden = !info.character;
   $('sasu').style.display = info.character ? 'none' : '';
