@@ -198,9 +198,20 @@ async function pickCharacter() {
   try { await replaceCharacter(); } finally { picking = false; buildTray(); }
 }
 
+// 파일 고르는 창을 맨 앞에. 메뉴 막대 앱이라 먼저 앞으로 나오고, 늘 위에 떠 있는 사수 창은 잠깐 내린다.
+async function openDialog(opts) {
+  app.focus({ steal: true });
+  win?.setAlwaysOnTop(false);
+  try {
+    return await dialog.showOpenDialog(opts);
+  } finally {
+    win?.setAlwaysOnTop(true, 'floating');
+  }
+}
+
 // 그림을 골라 표정별로 나눠 내 캐릭터 폴더에 복사한다. 원본을 옮기거나 지워도 그대로 보이게.
 async function replaceCharacter() {
-  const r = await dialog.showOpenDialog({
+  const r = await openDialog({
     title: '캐릭터 그림 고르기',
     message: '한 장이면 모든 표정에 씁니다. 여러 장이면 파일 이름(idle·thinking·warn·happy·sleep 또는 기본·생각·놀람·신남·졸림)으로 나눕니다.',
     properties: ['openFile', 'multiSelections'],
@@ -516,7 +527,7 @@ function setAutoStart(on) {
 
 // ---------- 트레이 메뉴 ----------
 async function addRepo() {
-  const r = await dialog.showOpenDialog({ title: '지켜볼 저장소 폴더', properties: ['openDirectory'] });
+  const r = await openDialog({ title: '지켜볼 저장소 폴더', properties: ['openDirectory'] });
   if (r.canceled || !r.filePaths[0]) return;
   const repo = r.filePaths[0];
   if (!fs.existsSync(path.join(repo, '.git'))) {
